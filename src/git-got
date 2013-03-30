@@ -5,6 +5,7 @@ import subprocess
 import os.path
 import hashlib
 import json
+import fnmatch
 
 def usage():
   print "%s usage" % sys.argv[0]
@@ -50,7 +51,7 @@ elif command == 'add':
   if not os.path.isfile(filename):
     print 'File not found'
     exit()
-  if os.path.file('.%s.got' % filename):
+  if os.path.isfile('.%s.got' % filename):
     print 'File already added'
     exit()
   sum = subprocess.check_output(['md5', '-q', filename]).rstrip()
@@ -63,10 +64,20 @@ elif command == 'add':
   except IOError as e:
     print 'Failed to create got file: %s' % e.strerror
   subprocess.check_call(['git', 'add', '.%s.got' % filename])
+  file = open('%s/.gitignore' % get_root(), 'w')
+  file.write('%s\n' % filename)
+  file.close()
   subprocess.check_call(['git', 'commit', '-m', 'File uploaded to got repository', '.%s.got' % filename])
 elif command == 'get':
   pass
 elif command == 'status':
-  pass
+  changed = []
+  for root, dirnames, filenames in os.walk(get_root()):
+    for filename in fnmatch.filter(filenames, '.*.got'):
+      sum1 = subprocess.check_output(['md5', '-q', filename[1:-4]]).rstrip()
+      sum2 = open(filename).read().rstrip()
+      if sum1 != sum2:
+        changed.append(filename[1:-4])
+  print 'Changes\n-------\n%s' % changed
 else:
   usage()
