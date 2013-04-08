@@ -7,6 +7,9 @@ import hashlib
 import json
 import fnmatch
 
+#LOG_LEVEL='INFO'
+LOG_LEVEL='DEBUG'
+
 def usage():
   print "%s usage" % sys.argv[0]
 
@@ -18,66 +21,98 @@ def get_remote():
   configuration = json.load(file)
   return configuration['remote']
 
-if len(sys.argv) <= 1:
+num_args = len(sys.argv)
+
+if num_args < 2:
   usage()
   exit()
 
 command = sys.argv[1]
 
-if command == 'init':
-  root = get_root()
+def get_got_filename(fully_qualified_filename):
+  (root, filename) = os.path.split(fully_qualified_filename)
+  return '%s/.%s.got' % (root, filename)
 
-  if os.path.isfile('%s/CV.got' % root):
-    print 'Repository already initialized'
-    exit()
-
-  try:
-    os.mkdir('%s/.got' % root)
-
-    remote = sys.argv[2]
-    configuration = { 'remote' : remote }
-    file = open('%s/.got/storage' % root, 'w')
-    json.dump(configuration, file)
-    file.close()
-
-    subprocess.check_call(['git', 'add', '%s/.got' % get_root()])
-    subprocess.check_call(['git', 'commit', '-m', 'Initializing got repository', '%s/.got' % get_root()])
-  except OSError:
-    print 'Repository already initialized'
-  except IOError as e:
-    print "Failed to create settings: %s" % e.strerror
-elif command == 'add':
-  filename = sys.argv[2]
-  if not os.path.isfile(filename):
-    print 'File not found'
-    exit()
-  if os.path.isfile('.%s.got' % filename):
-    print 'File already added'
-    exit()
+def add_cb(filename):
+  log_debug('add_cb: Adding %s' % filename)
   sum = subprocess.check_output(['md5', '-q', filename]).rstrip()
-  try:
-    remote = get_remote()
-    subprocess.check_call(['scp', filename, '%s/%s.got' % (remote, sum)])
-    hash_file = open('.%s.got' % filename, 'w')
-    hash_file.write('%s' % sum)
-    hash_file.close()
-  except IOError as e:
-    print 'Failed to create got file: %s' % e.strerror
-  subprocess.check_call(['git', 'add', '.%s.got' % filename])
+  remote = get_remote()
+  subprocess.check_call(['scp', filename, '%s/%s.got' % (remote, sum)])
+  got_filename = get_got_filename(filename)
+  hash_file = open(got_filename, 'w')
+  hash_file.write('%s' % sum)
+  hash_file.close()
+  subprocess.check_call(['git', 'add', got_filename])
   file = open('%s/.gitignore' % get_root(), 'w')
   file.write('%s\n' % filename)
   file.close()
-  subprocess.check_call(['git', 'commit', '-m', 'File uploaded to got repository', '.%s.got' % filename])
-elif command == 'get':
+
+def status_cb(filename):
+  actual_filename = filename[1:-4]
+  log_debug('Actual %s' % actual_filename)
+  if not os.path.exists(actual_filename):
+    return 'Remote: %s' % actual_filename
+  sum1 = subprocess.check_output(['md5', '-q', actual_filename]).rstrip()
+  sum2 = open(filename).read().rstrip()
+  if sum1 != sum2:
+    return 'Changed: %s' % actual_filename
+
+def start_transaction():
   pass
+
+def end_transaction():
+  pass
+
+def log_debug(message):
+  if LOG_LEVEL == 'DEBUG':
+    print 'DEBUG: %s' % message
+
+def walker(function, args):
+  output = []
+  start_transaction()
+  for arg in args:
+    log_debug('walker: processing argument %s' % arg)
+    if os.path.isfile(arg):
+      log_debug('walker: processing file %s' % arg)
+      output.append(function(arg))
+    else:
+      for _, dirs, filenames in os.walk(arg):
+        if '.git' in dirs:
+          dirs.remove('.git')
+        if '.got' in dirs:
+          dirs.remove('.got')
+        for dir in dirs:
+          # @TODO Will be susceptible to circular links
+          log_debug('walker: recursing into %s' % dir)
+          output.append(walker(function, [dir]))
+        for filename in fnmatch.filter(filenames, '.*.got'):
+          log_debug('walker: processing file %s' % filename)
+          output.append(function(filename))
+  end_transaction()
+
+  return output
+
+if command == 'init':
+  start_transaction()
+  os.mkdir('%s/.got' % root)
+  remote = sys.argv[2]
+  configuration = { 'remote' : remote }
+  file = open('%s/.got/storage' % root, 'w')
+  json.dump(configuration, file)
+  file.close()
+  subprocess.check_call(['git', 'add', '%s/.got' % root])
+  end_transaction()
+elif command == 'add':
+  log_debug('main: Add command %s' % sys.argv[2:])
+  walker(add_cb, sys.argv[2:])
+elif command == 'reset':
+  walker(reset_cb, sys.argv[2:])
+elif command == 'get':
+  walker(get_cb, sys.argv[2:])
 elif command == 'status':
-  changed = []
-  for root, dirnames, filenames in os.walk(get_root()):
-    for filename in fnmatch.filter(filenames, '.*.got'):
-      sum1 = subprocess.check_output(['md5', '-q', filename[1:-4]]).rstrip()
-      sum2 = open(filename).read().rstrip()
-      if sum1 != sum2:
-        changed.append(filename[1:-4])
+  changed = walker(status_cb, [get_root()])
   print 'Changes\n-------\n%s' % changed
 else:
   usage()
+
+# vim: set filetype=python :
