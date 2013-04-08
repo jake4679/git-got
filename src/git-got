@@ -11,7 +11,14 @@ import fnmatch
 LOG_LEVEL='DEBUG'
 
 def usage():
-  print "%s usage" % sys.argv[0]
+  print 'git got <command> [<args>]'
+  print
+  print 'The most commonly used git got commands are:'
+  print '  init   Initialize the remote to be used with the repository'
+  print '  get    Retrieve all remote files to the local working area'
+  print '  add    Add a file to the remote repository'
+  print '  status Request the status of a got tracked file'
+  print '  reset  Ovewrite a gotted file with the remote copy'
 
 def get_root():
   return subprocess.check_output(['git', 'rev-parse', '--show-toplevel']).rstrip()
@@ -21,24 +28,28 @@ def get_remote():
   configuration = json.load(file)
   return configuration['remote']
 
-num_args = len(sys.argv)
+def get_local_got_filename(fully_qualified_filename):
+  (base, filename) = os.path.split(fully_qualified_filename)
+  return os.path.join(base, '.%s.got' % filename)
 
-if num_args < 2:
-  usage()
-  exit()
-
-command = sys.argv[1]
-
-def get_got_filename(fully_qualified_filename):
+def get_real_filename(fully_qualified_filename):
   (root, filename) = os.path.split(fully_qualified_filename)
-  return '%s/.%s.got' % (root, filename)
+  return os.path.join(root, filename[1:-4])
+
+def reset_cb(filename):
+  log_debug('reset_cb: Reseting %s' % filename)
+  got_filename = get_local_got_filename(filename)
+  log_debug('reset_cb: Using %s for local got file' % got_filename)
+  sum = open(got_filename).read().rstrip()
+  remote = get_remote()
+  subprocess.check_call(['scp', '%s/%s.got' % (remote, sum), filename])
 
 def add_cb(filename):
   log_debug('add_cb: Adding %s' % filename)
   sum = subprocess.check_output(['md5', '-q', filename]).rstrip()
   remote = get_remote()
   subprocess.check_call(['scp', filename, '%s/%s.got' % (remote, sum)])
-  got_filename = get_got_filename(filename)
+  got_filename = get_local_got_filename(filename)
   hash_file = open(got_filename, 'w')
   hash_file.write('%s' % sum)
   hash_file.close()
@@ -48,7 +59,7 @@ def add_cb(filename):
   file.close()
 
 def status_cb(filename):
-  actual_filename = filename[1:-4]
+  actual_filename = get_real_filename(filename)
   log_debug('Actual %s' % actual_filename)
   if not os.path.exists(actual_filename):
     return 'Remote: %s' % actual_filename
@@ -67,51 +78,89 @@ def log_debug(message):
   if LOG_LEVEL == 'DEBUG':
     print 'DEBUG: %s' % message
 
+def upgrade_cb(new):
+  pass
+
 def walker(function, args):
   output = []
-  start_transaction()
   for arg in args:
     log_debug('walker: processing argument %s' % arg)
     if os.path.isfile(arg):
       log_debug('walker: processing file %s' % arg)
       output.append(function(arg))
     else:
-      for _, dirs, filenames in os.walk(arg):
+      for base, dirs, filenames in os.walk(arg):
         if '.git' in dirs:
           dirs.remove('.git')
         if '.got' in dirs:
           dirs.remove('.got')
-        for dir in dirs:
-          # @TODO Will be susceptible to circular links
-          log_debug('walker: recursing into %s' % dir)
-          output.append(walker(function, [dir]))
         for filename in fnmatch.filter(filenames, '.*.got'):
-          log_debug('walker: processing file %s' % filename)
-          output.append(function(filename))
-  end_transaction()
-
+          log_debug('walker: processing file %s/%s' % (base, filename))
+          output.append(function('%s/%s' % (base, filename)))
   return output
+
+def check_initialized():
+  if os.path.isfile('%s/.got/storage' % get_root()):
+    return True
+  return False
+
+def check_got_version(version):
+  configuration = load_configuration()
+  if VERSION != configuration['version']:
+    return False
+  return True
+
+VERSION = 0
+
+num_args = len(sys.argv)
+
+if num_args < 2:
+  usage()
+  exit()
+
+command = sys.argv[1]
 
 if command == 'init':
   start_transaction()
-  os.mkdir('%s/.got' % root)
+  try:
+    os.mkdir('%s/.got' % get_root())
+  except OSError:
+    # This means the directory already existed according to
+    # the python documentation
+    pass
   remote = sys.argv[2]
-  configuration = { 'remote' : remote }
-  file = open('%s/.got/storage' % root, 'w')
+  configuration = { 'remote' : remote , 'version' : VERSION }
+  file = open('%s/.got/storage' % get_root(), 'w')
   json.dump(configuration, file)
   file.close()
-  subprocess.check_call(['git', 'add', '%s/.got' % root])
+  subprocess.check_call(['git', 'add', '%s/.got' % get_root()])
   end_transaction()
+elif not check_initialized():
+  print 'Got not initialized\n'
+  usage()
+  exit()
+elif command == 'upgrade':
+  upgrade_cb(VERSION)
+elif not check_version(VERSION):
+  print 'Version of got repository requires upgrading, run upgrade command'
+  usage()
+  exit()
 elif command == 'add':
+  start_transaction()
   log_debug('main: Add command %s' % sys.argv[2:])
   walker(add_cb, sys.argv[2:])
+  end_transaction()
 elif command == 'reset':
   walker(reset_cb, sys.argv[2:])
 elif command == 'get':
   walker(get_cb, sys.argv[2:])
 elif command == 'status':
-  changed = walker(status_cb, [get_root()])
-  print 'Changes\n-------\n%s' % changed
+  changes = walker(status_cb, [get_root()])
+  print '# Changes',
+  for change in changes:
+    if None != change:
+      print '\n# %s' % change,
+  print '\n',
 else:
   usage()
 
