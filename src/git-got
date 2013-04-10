@@ -7,8 +7,7 @@ import hashlib
 import json
 import fnmatch
 
-#LOG_LEVEL='INFO'
-LOG_LEVEL='DEBUG'
+LOG_LEVELS=['DEBUG', 'INFO', 'WARN', 'ERROR']
 
 def usage():
   print 'git got <command> [<args>]'
@@ -20,12 +19,32 @@ def usage():
   print '  status Request the status of a got tracked file'
   print '  reset  Ovewrite a gotted file with the remote copy'
 
+root_valid = False
+root_path = ""
+
 def get_root():
-  return subprocess.check_output(['git', 'rev-parse', '--show-toplevel']).rstrip()
+  global root_valid
+  global root_path
+  if not root_valid:
+    root_path = subprocess.check_output(['git', 'rev-parse', '--show-toplevel']).rstrip()
+    root_valid = True
+  return root_path
+
+configuration_loaded = False
+configuration = []
+
+def load_configuration():
+  global configuration_loaded
+  global configuration
+  if not configuration_loaded:
+    file = open('%s/.got/storage' % get_root(), 'r')
+    configuration = json.load(file)
+    file.close()
+    configuration_loaded = True
+  return configuration
 
 def get_remote():
-  file = open('%s/.got/storage' % get_root(), 'r')
-  configuration = json.load(file)
+  configuration = load_configuration()
   return configuration['remote']
 
 def get_local_got_filename(fully_qualified_filename):
@@ -36,37 +55,56 @@ def get_real_filename(fully_qualified_filename):
   (root, filename) = os.path.split(fully_qualified_filename)
   return os.path.join(root, filename[1:-4])
 
+def get_cb(filename):
+  try:
+    real_filename = get_real_filename(filename)
+    log_debug('add_cb: Using %s for local file' % real_filename)
+    sum = open(filename).read().rstrip()
+    remote = get_remote()
+    subprocess.check_call(['scp', '%s/%s.got' % (remote, sum), real_filename])
+  except Exception as e:
+    log_error('Failed to retrieve file %s' % filename, e)
+
 def reset_cb(filename):
-  log_debug('reset_cb: Reseting %s' % filename)
-  got_filename = get_local_got_filename(filename)
-  log_debug('reset_cb: Using %s for local got file' % got_filename)
-  sum = open(got_filename).read().rstrip()
-  remote = get_remote()
-  subprocess.check_call(['scp', '%s/%s.got' % (remote, sum), filename])
+  try:
+    log_debug('reset_cb: Reseting %s' % filename)
+    got_filename = get_local_got_filename(filename)
+    log_debug('reset_cb: Using %s for local got file' % got_filename)
+    sum = open(got_filename).read().rstrip()
+    remote = get_remote()
+    subprocess.check_call(['scp', '%s/%s.got' % (remote, sum), filename])
+  except Exception as e:
+    log_error('Failed to reset %s' % filename, e)
 
 def add_cb(filename):
-  log_debug('add_cb: Adding %s' % filename)
-  sum = subprocess.check_output(['md5', '-q', filename]).rstrip()
-  remote = get_remote()
-  subprocess.check_call(['scp', filename, '%s/%s.got' % (remote, sum)])
-  got_filename = get_local_got_filename(filename)
-  hash_file = open(got_filename, 'w')
-  hash_file.write('%s' % sum)
-  hash_file.close()
-  subprocess.check_call(['git', 'add', got_filename])
-  file = open('%s/.gitignore' % get_root(), 'w')
-  file.write('%s\n' % filename)
-  file.close()
+  try:
+    log_debug('add_cb: Adding %s' % filename)
+    sum = subprocess.check_output(['md5', '-q', filename]).rstrip()
+    remote = get_remote()
+    subprocess.check_call(['scp', filename, '%s/%s.got' % (remote, sum)])
+    got_filename = get_local_got_filename(filename)
+    hash_file = open(got_filename, 'w')
+    hash_file.write('%s' % sum)
+    hash_file.close()
+    subprocess.check_call(['git', 'add', got_filename])
+    file = open('%s/.gitignore' % get_root(), 'w')
+    file.write('%s\n' % filename)
+    file.close()
+  except Exception as e:
+    log_error('Failed to add %s' % filename, e)
 
 def status_cb(filename):
-  actual_filename = get_real_filename(filename)
-  log_debug('Actual %s' % actual_filename)
-  if not os.path.exists(actual_filename):
-    return 'Remote: %s' % actual_filename
-  sum1 = subprocess.check_output(['md5', '-q', actual_filename]).rstrip()
-  sum2 = open(filename).read().rstrip()
-  if sum1 != sum2:
-    return 'Changed: %s' % actual_filename
+  try:
+    actual_filename = get_real_filename(filename)
+    log_debug('Actual %s' % actual_filename)
+    if not os.path.exists(actual_filename):
+      return 'Remote: %s' % actual_filename
+    sum1 = subprocess.check_output(['md5', '-q', actual_filename]).rstrip()
+    sum2 = open(filename).read().rstrip()
+    if sum1 != sum2:
+      return 'Modified: %s' % actual_filename
+  except Exception as e:
+    log_error('Failed to status %s' % filename, e)
 
 def start_transaction():
   pass
@@ -74,9 +112,24 @@ def start_transaction():
 def end_transaction():
   pass
 
-def log_debug(message):
-  if LOG_LEVEL == 'DEBUG':
-    print 'DEBUG: %s' % message
+def log(level, message, exception):
+  print '%s : %s : %s' % (level, message, exception)
+
+def log_error(message, exception = None):
+  if 'ERROR' in LOG_LEVELS:
+    log('ERROR', message, exception)
+
+def log_warn(message, exception = None):
+  if 'WARN' in LOG_LEVELS:
+    log('WARN', message, exception)
+
+def log_info(message, exception = None):
+  if 'INFO' in LOG_LEVELS:
+    log('INFO', message, exception)
+
+def log_debug(message, exception = None):
+  if 'DEBUG' in LOG_LEVELS:
+    log('DEBUG', message, exception)
 
 def upgrade_cb(new):
   pass
@@ -104,7 +157,7 @@ def check_initialized():
     return True
   return False
 
-def check_got_version(version):
+def check_version(version):
   configuration = load_configuration()
   if VERSION != configuration['version']:
     return False
@@ -134,6 +187,9 @@ if command == 'init':
   json.dump(configuration, file)
   file.close()
   subprocess.check_call(['git', 'add', '%s/.got' % get_root()])
+  file = open('%s/.gitignore' % get_root(), 'w')
+  file.close()
+  subprocess.check_call(['git', 'add', '%s/.gitignore' % get_root()])
   end_transaction()
 elif not check_initialized():
   print 'Got not initialized\n'
@@ -153,7 +209,7 @@ elif command == 'add':
 elif command == 'reset':
   walker(reset_cb, sys.argv[2:])
 elif command == 'get':
-  walker(get_cb, sys.argv[2:])
+  walker(get_cb, [get_root()])
 elif command == 'status':
   changes = walker(status_cb, [get_root()])
   print '# Changes',
