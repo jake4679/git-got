@@ -22,6 +22,12 @@ well as the file being tracked to the gitignore file.
 
     git got add path/bigfile
 
+### To retreive all files for an existing repository
+This will iterate over all .got files in the repository and pull down their contents.
+Currently does not verify if any local changes have been made.
+
+    git got get
+
 ### To check the status of tracked files
 This will report which files in the repository have been modified.
 
