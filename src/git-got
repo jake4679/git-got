@@ -6,8 +6,11 @@ import os.path
 import hashlib
 import json
 import fnmatch
+import hashlib
 
-LOG_LEVELS=['DEBUG', 'INFO', 'WARN', 'ERROR']
+DEFAULT_LOG_LEVELS=['INFO', 'WARN', 'ERROR']
+
+LOG_LEVELS = DEFAULT_LOG_LEVELS
 
 def usage():
   print 'git got <command> [<args>]'
@@ -32,6 +35,21 @@ def get_root():
 
 configuration_loaded = False
 configuration = []
+
+def file_hash(filename):
+  hasher = hashlib.sha1()
+  file = open(filename, 'rb')
+  try:
+    while True:
+      data = file.read(8192)
+      if not data:
+        break
+      hasher.update(data)
+  except Exception as e:
+    raise
+  finally:
+    file.close()
+  return hasher.hexdigest()
 
 def load_configuration():
   global configuration_loaded
@@ -79,7 +97,7 @@ def reset_cb(filename):
 def add_cb(filename):
   try:
     log_debug('add_cb: Adding %s' % filename)
-    sum = subprocess.check_output(['md5', '-q', filename]).rstrip()
+    sum = file_hash(filename)
     remote = get_remote()
     subprocess.check_call(['scp', filename, '%s/%s.got' % (remote, sum)])
     got_filename = get_local_got_filename(filename)
@@ -91,6 +109,7 @@ def add_cb(filename):
     file.write('%s\n' % filename)
     file.close()
   except Exception as e:
+    print sys.exc_traceback.tb_lineno
     log_error('Failed to add %s' % filename, e)
 
 def status_cb(filename):
@@ -99,7 +118,7 @@ def status_cb(filename):
     log_debug('Actual %s' % actual_filename)
     if not os.path.exists(actual_filename):
       return 'Remote: %s' % actual_filename
-    sum1 = subprocess.check_output(['md5', '-q', actual_filename]).rstrip()
+    sum1 = file_hash(actual_filename)
     sum2 = open(filename).read().rstrip()
     if sum1 != sum2:
       return 'Modified: %s' % actual_filename
@@ -116,7 +135,7 @@ def log(level, message, exception):
   if None is exception:
     print '%s : %s' % (level, message)
   else:
-    print '%s : %s : %s' % (level, message, exception)
+    print '%s:%s:%s' % (level, message, exception)
 
 def log_error(message, exception = None):
   if 'ERROR' in LOG_LEVELS:
