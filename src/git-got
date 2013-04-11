@@ -58,7 +58,7 @@ def get_real_filename(fully_qualified_filename):
 def get_cb(filename):
   try:
     real_filename = get_real_filename(filename)
-    log_debug('add_cb: Using %s for local file' % real_filename)
+    log_debug('get_cb: Using %s for local file' % real_filename)
     sum = open(filename).read().rstrip()
     remote = get_remote()
     subprocess.check_call(['scp', '%s/%s.got' % (remote, sum), real_filename])
@@ -113,7 +113,10 @@ def end_transaction():
   pass
 
 def log(level, message, exception):
-  print '%s : %s : %s' % (level, message, exception)
+  if None is exception:
+    print '%s : %s' % (level, message)
+  else:
+    print '%s : %s : %s' % (level, message, exception)
 
 def log_error(message, exception = None):
   if 'ERROR' in LOG_LEVELS:
