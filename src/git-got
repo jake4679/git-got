@@ -8,15 +8,108 @@ import json
 import fnmatch
 import hashlib
 
+# For SRR support
+import httplib
+import re
+
 DEFAULT_LOG_LEVELS=['INFO', 'WARN', 'ERROR']
 
 LOG_LEVELS = DEFAULT_LOG_LEVELS
+
+def load_scp(filename, checksum):
+  remote = get_remote()
+  subprocess.check_call(['scp', '%s/%s.got' % (remote, checksum), filename])
+
+def store_scp(filename, checksum):
+  remote = get_remote()
+  subprocess.check_call(['scp', filename, '%s/%s.got' % (remote, checksum)])
+
+def store_srr(filename, checksum):
+  (server_name, parent_id) = get_location_info_srr()
+  local_path = filename
+  target_id = ''
+  remote_path = '%s' % checksum
+  description = 'Got storage for %s/%s @ TBD hashtag' % (get_root(), filename)
+
+  # "body" includes everything up to (but not including) the file
+  boundary = "-------------iRobot-Multipart-Boundary-------------"
+  body = '--' + boundary + '\r\n'
+  body += 'Content-Disposition: form-data; name="parent_id"\r\n\r\n'
+  body += str(parent_id) + '\r\n' + '--' + boundary + '\r\n'
+  body += 'Content-Disposition: form-data; name="target_id"\r\n\r\n'
+  body += str(target_id) + '\r\n' + '--' + boundary + '\r\n'
+  body += 'Content-Disposition: form-data; name="description"\r\n\r\n'
+  body += description + '\r\n' + '--' + boundary + '\r\n'
+  body += 'Content-Disposition: form-data; name="file"; filename="%s"\r\n'\
+        % remote_path
+  body += 'Content-Transfer-Encoding: binary\r\n'
+  body += 'MIME-Version: 1.0\r\n\r\n'
+  tail = '\r\n--' + boundary + '--\r\n\r\n'
+  content_length = len(body) + os.path.getsize(local_path) + len(tail)
+  # Upload form and file to server
+  # @todo Exception Handling
+  http_c = httplib.HTTPConnection(server_name)
+  http_c.putrequest('POST', '/srr/api/add_file')
+  http_c.putheader('Content-Type',
+                   'multipart/form-data; boundary=%s' % boundary)
+  http_c.putheader('Content-Length', content_length)
+  http_c.endheaders()
+  http_c.send(body)
+  # Send file in reasonably-sized blocks
+  fp = open(local_path, 'rb')
+  data_block = fp.read(4096)
+  bytes_sent = 0
+  while data_block:
+      http_c.send(data_block)
+      bytes_sent += len(data_block)
+      data_block = fp.read(4096)
+  fp.close()
+  http_c.send(tail)
+  response = http_c.getresponse()
+  result = response.read()
+  http_c.close()
+  if response.status != 200:
+        raise SRRError("%s: %s" % (response.reason, result))
+  new_id_re = re.compile(r' file_id=(\d+)\s*$')
+  m = new_id_re.search(result)
+  if m:
+      return int(m.group(1))
+  else:
+         raise SRRError("Unexpected result from SRR: %s" % result)
+
+def parse_path_srr(path):
+  result_re = re.compile('http://(.*)/.*/(\d+)$')
+  matches = result_re.match(path)
+  return (matches.group(1), matches.group(2))
+  
+def get_location_info_srr():
+  return parse_path_srr(get_remote())
+
+def load_srr(filename, checksum):
+  (server, parent_id) = get_location_info_srr()
+
+  path = get_remote_path_srr(server, parent_id)
+  subprocess.check_call(
+    ['curl', '-o' , filename , '-#', '%s/%s' % (path, checksum)])
+
+remote_store_file = store_srr
+remote_load_file = load_srr
+
+def init_backing_store():
+  configuration = load_configuration()
+  if configuration['remote_type'] == 'srr':
+    remote_load_file = load_srr
+    remote_store_file = store_srr
+  else:
+    remote_load_file = load_scp
+    remote_store_file = store_scp
 
 def usage():
   print 'git got <command> [<args>]'
   print
   print 'The most commonly used git got commands are:'
   print '  init   Initialize the remote to be used with the repository'
+  print '    <type> <parameters>'
   print '  get    Retrieve all remote files to the local working area'
   print '  add    Add a file to the remote repository'
   print '  status Request the status of a got tracked file'
@@ -78,8 +171,7 @@ def get_cb(filename):
     real_filename = get_real_filename(filename)
     log_debug('get_cb: Using %s for local file' % real_filename)
     sum = open(filename).read().rstrip()
-    remote = get_remote()
-    subprocess.check_call(['scp', '%s/%s.got' % (remote, sum), real_filename])
+    remote_load_file(rel_filename, sum)
   except Exception as e:
     log_error('Failed to retrieve file %s' % filename, e)
 
@@ -89,8 +181,7 @@ def reset_cb(filename):
     got_filename = get_local_got_filename(filename)
     log_debug('reset_cb: Using %s for local got file' % got_filename)
     sum = open(got_filename).read().rstrip()
-    remote = get_remote()
-    subprocess.check_call(['scp', '%s/%s.got' % (remote, sum), filename])
+    remote_load_file(filename, sum)
   except Exception as e:
     log_error('Failed to reset %s' % filename, e)
 
@@ -98,8 +189,7 @@ def add_cb(filename):
   try:
     log_debug('add_cb: Adding %s' % filename)
     sum = file_hash(filename)
-    remote = get_remote()
-    subprocess.check_call(['scp', filename, '%s/%s.got' % (remote, sum)])
+    remote_store_file(filename, sum)
     got_filename = get_local_got_filename(filename)
     hash_file = open(got_filename, 'w')
     hash_file.write('%s' % sum)
@@ -176,6 +266,7 @@ def walker(function, args):
 
 def check_initialized():
   if os.path.isfile('%s/.got/storage' % get_root()):
+    init_backing_store()
     return True
   return False
 
@@ -185,7 +276,7 @@ def check_version(version):
     return False
   return True
 
-VERSION = 0
+VERSION = 1
 
 num_args = len(sys.argv)
 
@@ -203,8 +294,10 @@ if command == 'init':
     # This means the directory already existed according to
     # the python documentation
     pass
-  remote = sys.argv[2]
-  configuration = { 'remote' : remote , 'version' : VERSION }
+  print sys.argv
+  type = sys.argv[2]
+  remote = sys.argv[3]
+  configuration = { 'remote' : remote , 'remote_type' : type , 'version' : VERSION }
   file = open('%s/.got/storage' % get_root(), 'w')
   json.dump(configuration, file)
   file.close()
