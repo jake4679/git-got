@@ -40,4 +40,4 @@ stored data in the current git repository.
     git got rm yourfile
 
 ### To change to a new remote repo
-    git got init yourusername@yournewserver.com:your_new_storage_location
+    git got init scp yourusername@yournewserver.com:your_new_storage_location
