@@ -13,7 +13,7 @@ the following steps inside of an initialized repository.
 This will initialize the repository structure as well as add and commit
 it to the git repository.
 
-    git got init yourusername@yourserver.com:your_storage_location
+    git got init scp yourusername@yourserver.com:your_storage_location
 
 ### To add(or change) a file to/in the got repo
 This will upload the file to the remote repository as well as adding and

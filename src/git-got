@@ -116,7 +116,7 @@ def usage():
   print
   print 'The most commonly used git got commands are:'
   print '  init   Initialize the remote to be used with the repository'
-  print '    <type> <parameters>'
+  print '    <repository type> <parameters>'
   print '  get    Retrieve all remote files to the local working area'
   print '  add    Add a file to the remote repository'
   print '  status Request the status of a got tracked file'
@@ -295,6 +295,10 @@ if num_args < 2:
 command = sys.argv[1]
 
 if command == 'init':
+  if num_args != 4:
+    usage()
+    exit()
+
   start_transaction()
   try:
     os.mkdir('%s/.got' % get_root())
