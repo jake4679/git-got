@@ -95,6 +95,9 @@ def get_remote_path_srr(server, checksum):
 def load_srr(filename, checksum):
   (server, parent_id) = get_location_info_srr()
 
+  if status_local(get_got_filename(filename)):
+    return
+
   path = get_remote_path_srr(server, checksum)
   subprocess.check_call(
     ['curl', '-o' , filename , '-#', path])
@@ -169,6 +172,10 @@ def get_local_got_filename(fully_qualified_filename):
   (base, filename) = os.path.split(fully_qualified_filename)
   return os.path.join(base, '.%s.got' % filename)
 
+def get_got_filename(fully_qualified_filename):
+  (root, filename) = os.path.split(fully_qualified_filename)
+  return os.path.join(root, '.%s.got' % filename)
+
 def get_real_filename(fully_qualified_filename):
   (root, filename) = os.path.split(fully_qualified_filename)
   return os.path.join(root, filename[1:-4])
@@ -202,7 +209,7 @@ def add_cb(filename):
     hash_file.write('%s' % sum)
     hash_file.close()
     subprocess.check_call(['git', 'add', got_filename])
-    file = open('%s/.gitignore' % get_root(), 'w')
+    file = open('%s/.gitignore' % get_root(), 'a')
     file.write('%s\n' % filename)
     file.close()
     subprocess.check_call(['git', 'add', '%s/.gitignore' % get_root()])
@@ -210,23 +217,51 @@ def add_cb(filename):
     print sys.exc_traceback.tb_lineno
     log_error('Failed to add %s' % filename, e)
 
-def status_cb(filename):
+def status_local(filename):
+  """ Determines if there are local changes made to the file specified in the
+      filename parameter.  Assumes filename is the fully qualified name of a got meta file.
+
+      @filename Got meta filename
+      @return 1 if The file is unchanged
+      @return 0 if the file is changed or not found
+  """
   try:
+    log_debug('status_local: Parameters %s' % filename)
     actual_filename = get_real_filename(filename)
-    log_debug('Actual %s' % actual_filename)
+    log_debug('status_local: Actual %s' % actual_filename)
     if not os.path.exists(actual_filename):
-      return 'Remote: %s' % actual_filename
+      log_debug('status_local: Did not find file %s' % actual_filename)
+      return 0
     sum1 = file_hash(actual_filename)
     sum2 = open(filename).read().rstrip()
     if sum1 != sum2:
+      log_debug('status_local: Got hash %i != file hash %i' % (sum1, sum2))
+      return 0
+    return 1
+  except Exception as e:
+    log_error('status_local: Failed to status %s' % filename, e)
+    return 0
+
+def status_cb(filename):
+  """ Retrieves the status of the filename specified.  Invoked from the main
+      walker loop.  Assumes the filename passed in is a got meta file.
+
+      @param filename Name of the got meta file to check 
+  """
+  try:
+    if not status_local(filename):
       return 'Modified: %s' % actual_filename
   except Exception as e:
     log_error('Failed to status %s' % filename, e)
 
 def start_transaction():
+  """ Does nothing for now, placeholder for transaction implementation
+  """
   pass
 
 def end_transaction():
+  """ Does nothing for now, placeholder for transaction implementation
+  """
   pass
 
 def log(level, message, exception):
