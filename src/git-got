@@ -8,6 +8,7 @@ import json
 import fnmatch
 import hashlib
 import requests
+import pycurl
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
 # For SRR support
@@ -70,8 +71,15 @@ def load_srr(filename, checksum):
     return
 
   path = get_remote_path_srr(server, checksum)
-  subprocess.check_call(
-    ['curl', '-o' , filename , '-#', path])
+  print filename
+  print path
+
+  with open(filename, 'wb') as f:
+    c = pycurl.Curl()
+    c.setopt(c.URL, path)
+    c.setopt(c.WRITEDATA, f)
+    c.perform()
+    c.close()
 
 remote_store_file = store_srr
 remote_load_file = load_srr
