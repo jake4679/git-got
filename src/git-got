@@ -260,16 +260,6 @@ def status_cb(filename):
   except Exception as e:
     log_error('Failed to status %s' % filename, e)
 
-def start_transaction():
-  """ Does nothing for now, placeholder for transaction implementation
-  """
-  pass
-
-def end_transaction():
-  """ Does nothing for now, placeholder for transaction implementation
-  """
-  pass
-
 def log(level, message, exception):
   if None is exception:
     print '%s : %s' % (level, message)
@@ -366,7 +356,6 @@ def main(argv):
       usage()
       return 1
 
-    start_transaction()
     remote_type = argv[2]
     if remote_type != 'srr' and remote_type != 'scp':
       usage()
@@ -382,7 +371,6 @@ def main(argv):
     ignorefile = open('%s/.gitignore' % get_root(), 'w')
     ignorefile.close()
     git_add('%s/.gitignore' % get_root())
-    end_transaction()
   elif not check_initialized():
     print 'Got not initialized\n'
     usage()
@@ -394,10 +382,8 @@ def main(argv):
     usage()
     return 1
   elif command == 'add':
-    start_transaction()
     log_debug('main: Add command %s' % argv[2:])
     walker(add_cb, argv[2:])
-    end_transaction()
   elif command == 'reset':
     walker(reset_cb, argv[2:])
   elif command == 'get':
