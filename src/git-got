@@ -47,7 +47,7 @@ def store_srr(filename, checksum):
   response = requests.post('http://%s/srr/api/add_file' % server_name, data = m, headers = {'Content-Type' : m.content_type})
 
   if response.status_code != 200:
-        raise SRRError("%s: %s" % (response.reason, result))
+    raise SRRError("%s: %s" % (response.reason, result))
   new_id_re = re.compile(r' file_id=(\d+)\s*$')
   m = new_id_re.search(response.text)
   if m:
