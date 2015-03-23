@@ -116,8 +116,6 @@ repo = None
 def reset():
   global root_valid
   global root_path
-  global repo_valid
-  global repo
   root_valid = False
   root_path = ""
 
