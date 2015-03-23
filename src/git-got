@@ -148,26 +148,26 @@ configuration = []
 
 def file_hash(filename):
   hasher = hashlib.md5()
-  file = open(filename, 'rb')
+  infp = open(filename, 'rb')
   try:
     while True:
-      data = file.read(8192)
+      data = infp.read(8192)
       if not data:
         break
       hasher.update(data)
   except Exception as e:
     raise
   finally:
-    file.close()
+    infp.close()
   return hasher.hexdigest()
 
 def load_configuration():
   global configuration_loaded
   global configuration
   if not configuration_loaded:
-    file = open('%s/.got/storage' % get_root(), 'r')
-    configuration = json.load(file)
-    file.close()
+    storagefp = open('%s/.got/storage' % get_root(), 'r')
+    configuration = json.load(storagefp)
+    storagefp.close()
     configuration_loaded = True
   return configuration
 
@@ -191,8 +191,8 @@ def get_cb(filename):
   try:
     real_filename = get_real_filename(filename)
     log_debug('get_cb: Using %s for local file' % real_filename)
-    sum = open(filename).read().rstrip()
-    remote_load_file(real_filename, sum)
+    csum = open(filename).read().rstrip()
+    remote_load_file(real_filename, csum)
   except Exception as e:
     log_error('Failed to retrieve file %s' % filename, e)
 
@@ -201,24 +201,24 @@ def reset_cb(filename):
     log_debug('reset_cb: Reseting %s' % filename)
     got_filename = get_local_got_filename(filename)
     log_debug('reset_cb: Using %s for local got file' % got_filename)
-    sum = open(got_filename).read().rstrip()
-    remote_load_file(filename, sum)
+    csum = open(got_filename).read().rstrip()
+    remote_load_file(filename, csum)
   except Exception as e:
     log_error('Failed to reset %s' % filename, e)
 
 def add_cb(filename):
   try:
     log_debug('add_cb: Adding %s' % filename)
-    sum = file_hash(filename)
-    remote_store_file(filename, sum)
+    csum = file_hash(filename)
+    remote_store_file(filename, csum)
     got_filename = get_local_got_filename(filename)
     hash_file = open(got_filename, 'w')
-    hash_file.write('%s' % sum)
+    hash_file.write('%s' % csum)
     hash_file.close()
     git_add(got_filename)
-    file = open('%s/.gitignore' % get_root(), 'a')
-    file.write('%s\n' % filename)
-    file.close()
+    gitignorefile = open('%s/.gitignore' % get_root(), 'a')
+    gitignorefile.write('%s\n' % filename)
+    gitignorefile.close()
     git_add('%s/.gitignore' % get_root())
   except Exception as e:
     print sys.exc_traceback.tb_lineno
@@ -376,12 +376,12 @@ def main(argv):
     remote = argv[3]
     mkdir_p('%s/.got' % get_root())
     configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION }
-    file = open('%s/.got/storage' % get_root(), 'w')
-    json.dump(configuration, file)
-    file.close()
+    storagefile = open('%s/.got/storage' % get_root(), 'w')
+    json.dump(configuration, storagefile)
+    storagefile.close()
     git_add('%s/.got/storage' % get_root())
-    file = open('%s/.gitignore' % get_root(), 'w')
-    file.close()
+    ignorefile = open('%s/.gitignore' % get_root(), 'w')
+    ignorefile.close()
     git_add('%s/.gitignore' % get_root())
     end_transaction()
   elif not check_initialized():
