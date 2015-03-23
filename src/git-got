@@ -88,6 +88,8 @@ remote_store_file = store_srr
 remote_load_file = load_srr
 
 def init_backing_store():
+  global remote_store_file
+  global remote_load_file
   configuration = load_configuration()
   if configuration['remote_type'] == 'srr':
     remote_load_file = load_srr
