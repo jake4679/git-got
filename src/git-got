@@ -346,8 +346,8 @@ def main(argv):
       return 1
 
     start_transaction()
-    type = argv[2]
-    if type != 'srr' and type != 'scp':
+    remote_type = argv[2]
+    if remote_type != 'srr' and remote_type != 'scp':
       usage()
       return 1
 
@@ -358,7 +358,7 @@ def main(argv):
       # This means the directory already existed according to
       # the python documentation
       pass
-    configuration = { 'remote' : remote , 'remote_type' : type , 'version' : VERSION }
+    configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION }
     file = open('%s/.got/storage' % get_root(), 'w')
     json.dump(configuration, file)
     file.close()
