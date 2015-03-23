@@ -59,7 +59,7 @@ def parse_path_srr(path):
   result_re = re.compile('http://(.*)/.*/(\d+)$')
   matches = result_re.match(path)
   return (matches.group(1), matches.group(2))
-  
+
 def get_location_info_srr():
   return parse_path_srr(get_remote())
 
@@ -253,7 +253,7 @@ def status_cb(filename):
   """ Retrieves the status of the filename specified.  Invoked from the main
       walker loop.  Assumes the filename passed in is a got meta file.
 
-      @param filename Name of the got meta file to check 
+      @param filename Name of the got meta file to check
   """
   try:
     if not status_local(filename):
@@ -333,18 +333,18 @@ def main(argv):
 # during invocation.  Useful when unit testing.
   reset()
   num_args = len(argv)
-  
+
   if num_args < 2:
     usage()
     return 1
-  
+
   command = argv[1]
 
   if command == 'init':
     if num_args != 4:
       usage()
       return 1
-  
+
     start_transaction()
     type = argv[2]
     if type != 'srr' and type != 'scp':
