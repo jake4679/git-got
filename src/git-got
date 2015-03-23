@@ -328,6 +328,28 @@ def check_version(version):
 
 VERSION = 1
 
+def mkdir_p(path):
+    """
+    Function to make a directory and all intermediate directories as
+    necessary.  The functionality differs from os.makedirs slightly, in
+    that this function does *not* raise an error if the directory already
+    exists.
+    """
+    if path is None:
+        raise Exception("Path cannot be None")
+
+    if path == '':
+        # this can happen if the user did something like call os.path.dirname()
+        # on a file without directories.  Since os.makedirs throws an exception
+        # in that case, check for it here and allow it.
+        return
+
+    try:
+        os.makedirs(path)
+    except OSError as err:
+        if err.errno != errno.EEXIST or not os.path.isdir(path):
+            raise
+
 def main(argv):
 # Reseting global "session" variables used for optimizing
 # during invocation.  Useful when unit testing.
@@ -352,12 +374,7 @@ def main(argv):
       return 1
 
     remote = argv[3]
-    try:
-      os.mkdir('%s/.got' % get_root())
-    except OSError:
-      # This means the directory already existed according to
-      # the python documentation
-      pass
+    mkdir_p('%s/.got' % get_root())
     configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION }
     file = open('%s/.got/storage' % get_root(), 'w')
     json.dump(configuration, file)
