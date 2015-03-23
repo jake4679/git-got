@@ -7,7 +7,6 @@ import os
 import hashlib
 import json
 import fnmatch
-import hashlib
 import requests
 import pycurl
 import dulwich.porcelain as porcy
