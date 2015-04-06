@@ -106,15 +106,12 @@ def usage():
   print '  status Request the status of a got tracked file'
   print '  reset  Ovewrite a gotted file with the remote copy'
 
-root_valid = False
 root_path = ""
 repo_valid = False
 repo = None
 
 def reset():
-  global root_valid
   global root_path
-  root_valid = False
   root_path = ""
 
 def get_repo():
@@ -129,15 +126,13 @@ def git_add(filename):
   porcy.add(get_repo(), filename)
 
 def get_root():
-  global root_valid
   global root_path
-  if not root_valid:
+  if root_path == "":
     root_path = os.getcwd()
     old_root_path = ''
     while not os.path.exists(os.path.join(root_path, '.git')) and root_path is not old_root_path:
       old_root_path = root_path
       root_path = os.path.dirname(root_path)
-    root_valid = True
   return root_path
 
 configuration_loaded = False
