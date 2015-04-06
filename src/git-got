@@ -10,6 +10,7 @@ import fnmatch
 import requests
 import pycurl
 import dulwich.porcelain as porcy
+import errno
 
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
