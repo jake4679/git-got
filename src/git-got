@@ -30,8 +30,6 @@ def store_scp(filename, checksum):
   subprocess.check_call(['scp', filename, '%s/%s.got' % (remote, checksum)])
 
 def store_srr(filename, checksum):
-  #m = MultipartEncoder(fields={'parent_id':'70009', 'target_id':'', 'description':'booja', 'file':('empty.dump', open('../empty.dump', 'rb'), 'application/octe/stream')})
-  #r = requests.post('http://hq-gnitools.wardrobe.irobot.com/srr/api/add_file', data=m,headers={'Content-Type': m.content_type})
   (server_name, parent_id) = get_location_info_srr()
   local_path = filename
   target_id = ''
