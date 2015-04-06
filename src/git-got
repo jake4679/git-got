@@ -7,7 +7,6 @@ import os
 import hashlib
 import json
 import fnmatch
-import hashlib
 import requests
 import pycurl
 import dulwich.porcelain as porcy
@@ -47,7 +46,7 @@ def store_srr(filename, checksum):
   response = requests.post('http://%s/srr/api/add_file' % server_name, data = m, headers = {'Content-Type' : m.content_type})
 
   if response.status_code != 200:
-        raise SRRError("%s: %s" % (response.reason, result))
+    raise SRRError("%s: %s" % (response.reason, result))
   new_id_re = re.compile(r' file_id=(\d+)\s*$')
   m = new_id_re.search(response.text)
   if m:
@@ -59,7 +58,7 @@ def parse_path_srr(path):
   result_re = re.compile('http://(.*)/.*/(\d+)$')
   matches = result_re.match(path)
   return (matches.group(1), matches.group(2))
-  
+
 def get_location_info_srr():
   return parse_path_srr(get_remote())
 
@@ -88,6 +87,8 @@ remote_store_file = store_srr
 remote_load_file = load_srr
 
 def init_backing_store():
+  global remote_store_file
+  global remote_load_file
   configuration = load_configuration()
   if configuration['remote_type'] == 'srr':
     remote_load_file = load_srr
@@ -115,8 +116,6 @@ repo = None
 def reset():
   global root_valid
   global root_path
-  global repo_valid
-  global repo
   root_valid = False
   root_path = ""
 
@@ -148,26 +147,26 @@ configuration = []
 
 def file_hash(filename):
   hasher = hashlib.md5()
-  file = open(filename, 'rb')
+  infp = open(filename, 'rb')
   try:
     while True:
-      data = file.read(8192)
+      data = infp.read(8192)
       if not data:
         break
       hasher.update(data)
   except Exception as e:
     raise
   finally:
-    file.close()
+    infp.close()
   return hasher.hexdigest()
 
 def load_configuration():
   global configuration_loaded
   global configuration
   if not configuration_loaded:
-    file = open('%s/.got/storage' % get_root(), 'r')
-    configuration = json.load(file)
-    file.close()
+    storagefp = open('%s/.got/storage' % get_root(), 'r')
+    configuration = json.load(storagefp)
+    storagefp.close()
     configuration_loaded = True
   return configuration
 
@@ -191,8 +190,8 @@ def get_cb(filename):
   try:
     real_filename = get_real_filename(filename)
     log_debug('get_cb: Using %s for local file' % real_filename)
-    sum = open(filename).read().rstrip()
-    remote_load_file(real_filename, sum)
+    csum = open(filename).read().rstrip()
+    remote_load_file(real_filename, csum)
   except Exception as e:
     log_error('Failed to retrieve file %s' % filename, e)
 
@@ -201,24 +200,24 @@ def reset_cb(filename):
     log_debug('reset_cb: Reseting %s' % filename)
     got_filename = get_local_got_filename(filename)
     log_debug('reset_cb: Using %s for local got file' % got_filename)
-    sum = open(got_filename).read().rstrip()
-    remote_load_file(filename, sum)
+    csum = open(got_filename).read().rstrip()
+    remote_load_file(filename, csum)
   except Exception as e:
     log_error('Failed to reset %s' % filename, e)
 
 def add_cb(filename):
   try:
     log_debug('add_cb: Adding %s' % filename)
-    sum = file_hash(filename)
-    remote_store_file(filename, sum)
+    csum = file_hash(filename)
+    remote_store_file(filename, csum)
     got_filename = get_local_got_filename(filename)
     hash_file = open(got_filename, 'w')
-    hash_file.write('%s' % sum)
+    hash_file.write('%s' % csum)
     hash_file.close()
     git_add(got_filename)
-    file = open('%s/.gitignore' % get_root(), 'a')
-    file.write('%s\n' % filename)
-    file.close()
+    gitignorefile = open('%s/.gitignore' % get_root(), 'a')
+    gitignorefile.write('%s\n' % filename)
+    gitignorefile.close()
     git_add('%s/.gitignore' % get_root())
   except Exception as e:
     print sys.exc_traceback.tb_lineno
@@ -253,23 +252,13 @@ def status_cb(filename):
   """ Retrieves the status of the filename specified.  Invoked from the main
       walker loop.  Assumes the filename passed in is a got meta file.
 
-      @param filename Name of the got meta file to check 
+      @param filename Name of the got meta file to check
   """
   try:
     if not status_local(filename):
       return 'Modified: %s' % actual_filename
   except Exception as e:
     log_error('Failed to status %s' % filename, e)
-
-def start_transaction():
-  """ Does nothing for now, placeholder for transaction implementation
-  """
-  pass
-
-def end_transaction():
-  """ Does nothing for now, placeholder for transaction implementation
-  """
-  pass
 
 def log(level, message, exception):
   if None is exception:
@@ -328,45 +317,60 @@ def check_version(version):
 
 VERSION = 1
 
+def mkdir_p(path):
+    """
+    Function to make a directory and all intermediate directories as
+    necessary.  The functionality differs from os.makedirs slightly, in
+    that this function does *not* raise an error if the directory already
+    exists.
+    """
+    if path is None:
+        raise Exception("Path cannot be None")
+
+    if path == '':
+        # this can happen if the user did something like call os.path.dirname()
+        # on a file without directories.  Since os.makedirs throws an exception
+        # in that case, check for it here and allow it.
+        return
+
+    try:
+        os.makedirs(path)
+    except OSError as err:
+        if err.errno != errno.EEXIST or not os.path.isdir(path):
+            raise
+
 def main(argv):
 # Reseting global "session" variables used for optimizing
 # during invocation.  Useful when unit testing.
   reset()
   num_args = len(argv)
-  
+
   if num_args < 2:
     usage()
     return 1
-  
+
   command = argv[1]
 
   if command == 'init':
     if num_args != 4:
       usage()
       return 1
-  
-    start_transaction()
-    type = argv[2]
-    if type != 'srr' and type != 'scp':
+
+    remote_type = argv[2]
+    if remote_type != 'srr' and remote_type != 'scp':
       usage()
       return 1
 
     remote = argv[3]
-    try:
-      os.mkdir('%s/.got' % get_root())
-    except OSError:
-      # This means the directory already existed according to
-      # the python documentation
-      pass
-    configuration = { 'remote' : remote , 'remote_type' : type , 'version' : VERSION }
-    file = open('%s/.got/storage' % get_root(), 'w')
-    json.dump(configuration, file)
-    file.close()
+    mkdir_p('%s/.got' % get_root())
+    configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION }
+    storagefile = open('%s/.got/storage' % get_root(), 'w')
+    json.dump(configuration, storagefile)
+    storagefile.close()
     git_add('%s/.got/storage' % get_root())
-    file = open('%s/.gitignore' % get_root(), 'w')
-    file.close()
+    ignorefile = open('%s/.gitignore' % get_root(), 'w')
+    ignorefile.close()
     git_add('%s/.gitignore' % get_root())
-    end_transaction()
   elif not check_initialized():
     print 'Got not initialized\n'
     usage()
@@ -378,10 +382,8 @@ def main(argv):
     usage()
     return 1
   elif command == 'add':
-    start_transaction()
     log_debug('main: Add command %s' % argv[2:])
     walker(add_cb, argv[2:])
-    end_transaction()
   elif command == 'reset':
     walker(reset_cb, argv[2:])
   elif command == 'get':
