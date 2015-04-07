@@ -108,7 +108,6 @@ def usage():
   print '  reset  Ovewrite a gotted file with the remote copy'
 
 root_path = ""
-repo_valid = False
 repo = None
 
 def reset():
@@ -116,11 +115,9 @@ def reset():
   root_path = ""
 
 def get_repo():
-  global repo_valid
   global repo
-  if not repo_valid:
+  if repo is None:
     repo = porcy.open_repo(get_root())
-    repo_valid = True
   return repo
 
 def git_add(filename):
