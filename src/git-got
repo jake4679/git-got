@@ -121,7 +121,10 @@ def get_repo():
   return repo
 
 def git_add(filename):
-  porcy.add(get_repo(), filename)
+  repo = get_repo()
+  filename = os.path.relpath(filename, get_root())
+  log_debug('git_add: Adding file %s to %s' % (filename, repo))
+  porcy.add(repo, filename)
 
 def get_root():
   global root_path
@@ -137,25 +140,19 @@ configuration = None
 
 def file_hash(filename):
   hasher = hashlib.md5()
-  infp = open(filename, 'rb')
-  try:
+  with open(filename, 'rb') as infp:
     while True:
       data = infp.read(8192)
       if not data:
         break
       hasher.update(data)
-  except Exception as e:
-    raise
-  finally:
-    infp.close()
   return hasher.hexdigest()
 
 def load_configuration():
   global configuration
   if configuration is None:
-    storagefp = open('%s/.got/storage' % get_root(), 'r')
-    configuration = json.load(storagefp)
-    storagefp.close()
+    with open('%s/.got/storage' % get_root(), 'r') as storagefp:
+      configuration = json.load(storagefp)
   return configuration
 
 def get_remote():
@@ -199,13 +196,11 @@ def add_cb(filename):
     csum = file_hash(filename)
     remote_store_file(filename, csum)
     got_filename = get_local_got_filename(filename)
-    hash_file = open(got_filename, 'w')
-    hash_file.write('%s' % csum)
-    hash_file.close()
+    with open(got_filename, 'w') as hash_file:
+      hash_file.write('%s' % csum)
     git_add(got_filename)
-    gitignorefile = open('%s/.gitignore' % get_root(), 'a')
-    gitignorefile.write('%s\n' % filename)
-    gitignorefile.close()
+    with open('%s/.gitignore' % get_root(), 'a') as gitignorefile:
+      gitignorefile.write('%s\n' % filename)
     git_add('%s/.gitignore' % get_root())
   except Exception as e:
     print sys.exc_traceback.tb_lineno
@@ -352,9 +347,8 @@ def main(argv):
     remote = argv[3]
     mkdir_p('%s/.got' % get_root())
     configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION }
-    storagefile = open('%s/.got/storage' % get_root(), 'w')
-    json.dump(configuration, storagefile)
-    storagefile.close()
+    with open('%s/.got/storage' % get_root(), 'w') as storagefile:
+      json.dump(configuration, storagefile)
     git_add('%s/.got/storage' % get_root())
     ignorefile = open('%s/.gitignore' % get_root(), 'w')
     ignorefile.close()
