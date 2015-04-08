@@ -9,7 +9,7 @@ import json
 import fnmatch
 import requests
 import pycurl
-import dulwich.porcelain as porcy
+import dulwich.porcelain
 import errno
 
 from requests_toolbelt.multipart.encoder import MultipartEncoder
@@ -117,13 +117,13 @@ def reset():
 def get_repo():
   global repo
   if repo is None:
-    repo = porcy.open_repo(get_root())
+    repo = dulwich.porcelain.open_repo(get_root())
   return repo
 
 def git_add(filename):
   repo = get_repo()
   log_debug('git_add: Adding file %s to %s' % (filename, repo))
-  porcy.add(repo, filename)
+  dulwich.porcelain.add(repo, filename)
 
 def get_root():
   global root_path
