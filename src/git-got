@@ -122,7 +122,6 @@ def get_repo():
 
 def git_add(filename):
   repo = get_repo()
-  filename = os.path.relpath(filename, get_root())
   log_debug('git_add: Adding file %s to %s' % (filename, repo))
   porcy.add(repo, filename)
 
@@ -151,7 +150,7 @@ def file_hash(filename):
 def load_configuration():
   global configuration
   if configuration is None:
-    with open('%s/.got/storage' % get_root(), 'r') as storagefp:
+    with open('.got/storage', 'r') as storagefp:
       configuration = json.load(storagefp)
   return configuration
 
@@ -199,9 +198,9 @@ def add_cb(filename):
     with open(got_filename, 'w') as hash_file:
       hash_file.write('%s' % csum)
     git_add(got_filename)
-    with open('%s/.gitignore' % get_root(), 'a') as gitignorefile:
+    with open('.gitignore', 'a') as gitignorefile:
       gitignorefile.write('%s\n' % filename)
-    git_add('%s/.gitignore' % get_root())
+    git_add('.gitignore')
   except Exception as e:
     print sys.exc_traceback.tb_lineno
     log_error('Failed to add %s' % filename, e)
@@ -287,7 +286,7 @@ def walker(function, args):
   return output
 
 def check_initialized():
-  if os.path.isfile('%s/.got/storage' % get_root()):
+  if os.path.isfile('.got/storage'):
     init_backing_store()
     return True
   return False
@@ -301,36 +300,63 @@ def check_version(version):
 VERSION = 1
 
 def mkdir_p(path):
-    """
-    Function to make a directory and all intermediate directories as
-    necessary.  The functionality differs from os.makedirs slightly, in
-    that this function does *not* raise an error if the directory already
-    exists.
-    """
-    if path is None:
-        raise Exception("Path cannot be None")
+  """
+  Function to make a directory and all intermediate directories as
+  necessary.  The functionality differs from os.makedirs slightly, in
+  that this function does *not* raise an error if the directory already
+  exists.
+  """
+  if path is None:
+    raise Exception("Path cannot be None")
 
-    if path == '':
-        # this can happen if the user did something like call os.path.dirname()
-        # on a file without directories.  Since os.makedirs throws an exception
-        # in that case, check for it here and allow it.
-        return
+  if path == '':
+    # this can happen if the user did something like call os.path.dirname()
+    # on a file without directories.  Since os.makedirs throws an exception
+    # in that case, check for it here and allow it.
+    return
 
-    try:
-        os.makedirs(path)
-    except OSError as err:
-        if err.errno != errno.EEXIST or not os.path.isdir(path):
-            raise
+  try:
+    os.makedirs(path)
+  except OSError as err:
+    if err.errno != errno.EEXIST or not os.path.isdir(path):
+      raise
+
+def find_git_path_and_chdir():
+  """
+  This function is expected to be called at the beginning and goes looking
+  for the closest .git subdirectory or file in the filesystem hierarchy.
+  We look for the .git subdirectory by first looking in ./.git, then changing
+  directory to .. and looking for .git, etc, until we either find a .git
+  directory or until we hit / (at which point we raise an error).  At the end
+  we have changed directory to the appropriate level, which is similar to how
+  git itself operates.  Assuming we succeed, this function returns a relative
+  path to the original path we started out in so that subsequent operations
+  (that may git add) can do the right thing.
+  """
+  origpath = os.getcwd()
+  curpath = origpath
+  while not os.path.exists(os.path.join(curpath, '.git')) and curpath != '/':
+    os.chdir("..")
+    curpath = os.getcwd()
+
+  if curpath == '/':
+    raise Exception, "Could not find git repository"
+
+  # OK, we found the .git directory/file.  Now return the original path
+  # relative to that found directory
+  return os.path.relpath(origpath, os.path.commonprefix([origpath, os.getcwd()]))
 
 def main(argv):
-# Reseting global "session" variables used for optimizing
-# during invocation.  Useful when unit testing.
+  # Reseting global "session" variables used for optimizing
+  # during invocation.  Useful when unit testing.
   reset()
   num_args = len(argv)
 
   if num_args < 2:
     usage()
     return 1
+
+  origpath = find_git_path_and_chdir()
 
   command = argv[1]
 
@@ -345,14 +371,14 @@ def main(argv):
       return 1
 
     remote = argv[3]
-    mkdir_p('%s/.got' % get_root())
+    mkdir_p('.got')
     configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION }
-    with open('%s/.got/storage' % get_root(), 'w') as storagefile:
+    with open('.got/storage', 'w') as storagefile:
       json.dump(configuration, storagefile)
-    git_add('%s/.got/storage' % get_root())
-    ignorefile = open('%s/.gitignore' % get_root(), 'w')
+    git_add('.got/storage')
+    ignorefile = open('.gitignore', 'w')
     ignorefile.close()
-    git_add('%s/.gitignore' % get_root())
+    git_add('.gitignore')
   elif not check_initialized():
     print 'Got not initialized\n'
     usage()
