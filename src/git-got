@@ -91,6 +91,7 @@ def store_scp(filename, checksum):
   ssh.close()
 
 def store_srr(filename, checksum):
+  log_debug("store_srr")
   (server_name, parent_id) = get_location_info_srr()
   local_path = filename
   target_id = ''
@@ -126,11 +127,11 @@ def get_remote_path_srr(server, checksum):
   return response.json()['url']
 
 def load_srr(filename, checksum):
+  log_debug("load_srr")
   (server, parent_id) = get_location_info_srr()
 
   path = get_remote_path_srr(server, checksum)
-  print filename
-  print path
+  log_debug("load_srr, filename %s, path %s" % (filename, path))
 
   with open(filename, 'wb') as f:
     c = pycurl.Curl()
