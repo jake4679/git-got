@@ -46,7 +46,7 @@ def get_location_info_scp():
   return (parser.hostname, parser.path, username)
 
 def load_scp(filename, checksum):
-  log_debug("store_scp")
+  log_debug("load_scp")
   (hostname, remote_dir, username) = get_location_info_scp()
   log_debug("hostname: %s, remote_dir: %s, username: %s" % (hostname, remote_dir, username))
   ssh = paramiko.SSHClient()
@@ -72,6 +72,19 @@ def store_scp(filename, checksum):
   sftp = ssh.open_sftp()
   sftp.chdir(remote_dir)
   remotefile = '%s.got' % (checksum)
+
+  # here we do an optimization; if the remote file with the right filename
+  # already exists, we don't need to upload it again.  Just get out of here
+  try:
+    sftp.stat(remotefile)
+    log_debug("File existed on remote, skipping upload...")
+    sftp.close()
+    ssh.close()
+    return
+  except IOError:
+    log_debug("Uploading file to remote...")
+    pass
+
   sftp.put(filename, remotefile, callback=printTotal)
   sys.stdout.write("\n")
   sftp.close()
@@ -114,9 +127,6 @@ def get_remote_path_srr(server, checksum):
 
 def load_srr(filename, checksum):
   (server, parent_id) = get_location_info_srr()
-
-  if status_local(get_got_filename(filename)):
-    return
 
   path = get_remote_path_srr(server, checksum)
   print filename
@@ -214,6 +224,13 @@ def get_cb(repo, filename):
     real_filename = get_real_filename(filename)
     log_debug('get_cb: Using %s for local file' % real_filename)
     csum = open(filename).read().rstrip()
+    # See if the real_filename already exists, and if so, whether it has the
+    # right checksum.  If both are true, we can skip the download.
+    if os.path.exists(real_filename):
+      if file_hash(real_filename) == csum:
+        log_debug("File already exists, and has right checksum; skipping download...")
+        return
+    log_debug("Downloading remote file...")
     remote_load_file(real_filename, csum)
   except Exception as e:
     log_error('Failed to retrieve file %s' % filename, e)
@@ -243,31 +260,6 @@ def add_cb(repo, filename):
   except Exception as e:
     print sys.exc_traceback.tb_lineno
     log_error('Failed to add %s' % filename, e)
-
-def status_local(filename):
-  """ Determines if there are local changes made to the file specified in the
-      filename parameter.  Assumes filename is the fully qualified name of a got meta file.
-
-      @filename Got meta filename
-      @return 1 if The file is unchanged
-      @return 0 if the file is changed or not found
-  """
-  try:
-    log_debug('status_local: Parameters %s' % filename)
-    actual_filename = get_real_filename(filename)
-    log_debug('status_local: Actual %s' % actual_filename)
-    if not os.path.exists(actual_filename):
-      log_debug('status_local: Did not find file %s' % actual_filename)
-      return 0
-    sum1 = file_hash(actual_filename)
-    sum2 = open(filename).read().rstrip()
-    if sum1 != sum2:
-      log_debug('status_local: Got hash %i != file hash %i' % (sum1, sum2))
-      return 0
-    return 1
-  except Exception as e:
-    log_error('status_local: Failed to status %s' % filename, e)
-    return 0
 
 def status_cb(repo, filename):
   """ Retrieves the status of the filename specified.  Invoked from the main
