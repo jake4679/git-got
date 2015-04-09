@@ -109,7 +109,7 @@ def get_location_info_srr():
   return parse_path_srr(get_remote())
 
 def get_remote_path_srr(server, checksum):
-  response = requests.get('http://%s/srr/api/file_metadata/md5/%s' % (server, checksum))
+  response = requests.get('http://%s/srr/api/file_metadata/sha256/%s' % (server, checksum))
   return response.json()['url']
 
 def load_srr(filename, checksum):
@@ -177,7 +177,7 @@ def get_root():
 configuration = None
 
 def file_hash(filename):
-  hasher = hashlib.md5()
+  hasher = hashlib.sha256()
   with open(filename, 'rb') as infp:
     while True:
       data = infp.read(8192)
