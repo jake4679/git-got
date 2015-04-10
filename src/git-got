@@ -191,12 +191,6 @@ def usage():
   print '  status Request the status of a got tracked file'
   print '  reset  Ovewrite a gotted file with the remote copy'
 
-root_path = ""
-
-def reset():
-  global root_path
-  root_path = ""
-
 def git_add(repo, filename):
   log_debug('git_add: Adding file %s to %s' % (filename, repo))
   dulwich.porcelain.add(repo, filename)
@@ -395,9 +389,6 @@ def find_git_path_and_chdir():
   return os.path.relpath(origpath, os.path.commonprefix([origpath, os.getcwd()]))
 
 def main(argv):
-  # Reseting global "session" variables used for optimizing
-  # during invocation.  Useful when unit testing.
-  reset()
   num_args = len(argv)
 
   if num_args < 2:
