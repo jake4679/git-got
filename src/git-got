@@ -101,7 +101,6 @@ def store_srr(filename, checksum):
   conn = httplib.HTTPConnection(server_name)
   conn.request("GET", "/srr/api/file_metadata/sha256/%s" % checksum)
   response = conn.getresponse()
-  result = response.read()
   conn.close()
   if response.status == 200:
     log_debug("File existed on remote, skipping upload...")
@@ -139,6 +138,20 @@ def get_remote_path_srr(server, checksum):
   response = requests.get('http://%s/srr/api/file_metadata/sha256/%s' % (server, checksum))
   return response.json()['url']
 
+last_mb = -1
+
+def curlprogress(down_total, down_current, up_total, up_current):
+  global last_mb
+  if down_total == 0:
+    return
+
+  current_mb = int(down_current) / 1048576
+  if current_mb > last_mb or down_current == down_total:
+    last_mb = current_mb
+    sys.stdout.write("Transferred %d/%d %s (%d %%)" % (down_current / 1024 / 1024, down_total / 1024 / 1024, "MB", down_current*100/down_total)),
+    sys.stdout.flush()
+    sys.stdout.write("\r")
+
 def load_srr(filename, checksum):
   log_debug("load_srr")
   (server, parent_id) = get_location_info_srr()
@@ -150,8 +163,12 @@ def load_srr(filename, checksum):
     c = pycurl.Curl()
     c.setopt(c.URL, path)
     c.setopt(c.WRITEDATA, f)
+    c.setopt(c.NOPROGRESS, 0)
+    c.setopt(c.PROGRESSFUNCTION, curlprogress)
     c.perform()
     c.close()
+
+  sys.stdout.write("\n")
 
 remote_store_file = store_srr
 remote_load_file = load_srr
