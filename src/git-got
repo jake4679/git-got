@@ -20,7 +20,7 @@ DEFAULT_LOG_LEVELS=['INFO', 'WARN', 'ERROR','DEBUG']
 
 LOG_LEVELS = DEFAULT_LOG_LEVELS
 
-def suffix_and_divider_from_bytes(total):
+def print_transfer_string(transferred, total, filename, direction):
   if total > 1073741824:
     suffix = "GB"
     divider = 1073741824
@@ -34,15 +34,27 @@ def suffix_and_divider_from_bytes(total):
     suffix = "bytes"
     divider = 1
 
-  return (suffix, divider)
+  divided_tran = int(transferred / divider)
+  divided_total = int(total / divider)
+  percent = int(transferred * 100 / total)
+  strlen_no_file = len(direction) + 1 + 1 + len(str(divided_tran)) + 1 + len(str(divided_total)) + 1 + len(suffix) + 2 + 3 + 3
+
+  filenamelen = len(filename)
+  if strlen_no_file + len(filename) > 80:
+    filenamelen = 80 - strlen_no_file
+
+  sys.stdout.write("{0} {1:.{2}s} {3}/{4} {5} ({6} %)".format(direction, filename, filenamelen, divided_tran, divided_total, suffix, percent))
+
+  sys.stdout.flush()
+  sys.stdout.write("\r")
 
 class SCP(object):
-  def _printTotal(self, transferred, total):
-    (suffix, divider) = suffix_and_divider_from_bytes(total)
+  def __init__(self):
+    self.direction = "Downloading"
+    self.filename = "Unset"
 
-    sys.stdout.write("Transferred %d/%d %s (%d %%)" % (transferred/divider, total/divider, suffix, transferred*100/total)),
-    sys.stdout.flush()
-    sys.stdout.write("\r")
+  def _printTotal(self, transferred, total):
+    print_transfer_string(transferred, total, self.filename, self.direction)
 
   def _get_location_info_scp(self):
     parser = urlparse.urlparse(get_remote())
@@ -62,6 +74,8 @@ class SCP(object):
     sftp = ssh.open_sftp()
     sftp.chdir(remote_dir)
     remotefile = '%s.got' % (checksum)
+    self.direction = "Downloading"
+    self.filename = filename
     sftp.get(remotefile, filename, callback=self._printTotal)
     sys.stdout.write("\n")
     sftp.close()
@@ -90,6 +104,8 @@ class SCP(object):
     except IOError:
       log_debug("Uploading file to remote...")
 
+    self.direction = "Uploading"
+    self.filename = filename
     sftp.put(filename, remotefile, callback=self._printTotal)
     sys.stdout.write("\n")
     sftp.close()
@@ -98,6 +114,8 @@ class SCP(object):
 class SRR(object):
   def __init__(self):
     self.last_mb = -1
+    self.direction = "Downloading"
+    self.filename = "Unset"
 
   def _get_location_info_srr(self):
     result_re = re.compile('http://(.*)/.*/(\d+)$')
@@ -149,14 +167,10 @@ class SRR(object):
     if down_total == 0:
       return
 
-    (suffix, divider) = suffix_and_divider_from_bytes(down_total)
-
     current_mb = int(down_current) / 1048576
     if current_mb > self.last_mb or down_current == down_total:
       self.last_mb = current_mb
-      sys.stdout.write("Transferred %d/%d %s (%d %%)" % (down_current / divider, down_total / divider, suffix, down_current * 100 / down_total)),
-      sys.stdout.flush()
-      sys.stdout.write("\r")
+      print_transfer_string(down_current, down_total, self.filename, self.direction)
 
   def load(self, filename, checksum):
     log_debug("load_srr")
@@ -166,6 +180,8 @@ class SRR(object):
     log_debug("load_srr, filename %s, path %s" % (filename, path))
 
     self.last_mb = -1
+    self.direction = "Downloading"
+    self.filename = filename
     with open(filename, 'wb') as f:
       c = pycurl.Curl()
       c.setopt(c.URL, path)
