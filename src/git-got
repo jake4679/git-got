@@ -97,6 +97,20 @@ def store_srr(filename, checksum):
   remote_path = '%s' % checksum
   description = 'Got storage for %s/%s @ TBD hashtag' % (get_root(), filename)
 
+  # first check to see if the file already exists in the SRR
+  conn = httplib.HTTPConnection(server_name)
+  conn.request("GET", "/srr/api/file_metadata/sha256/%s" % checksum)
+  response = conn.getresponse()
+  result = response.read()
+  conn.close()
+  if response.status == 200:
+    log_debug("File existed on remote, skipping upload...")
+    return
+
+  # if the response was 404, the object was not in the store and thus we need
+  # to upload it
+  log_debug("Uploading file to remote...")
+
   m = MultipartEncoder(fields={
     'parent_id' : parent_id,
     'target_id' : '',
