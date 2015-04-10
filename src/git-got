@@ -20,20 +20,25 @@ DEFAULT_LOG_LEVELS=['INFO', 'WARN', 'ERROR','DEBUG']
 
 LOG_LEVELS = DEFAULT_LOG_LEVELS
 
+def suffix_and_divider_from_bytes(total):
+  if total > 1073741824:
+    suffix = "GB"
+    divider = 1073741824
+  elif total > 1048576:
+    suffix = "MB"
+    divider = 1048576
+  elif total > 1024:
+    suffix = "KB"
+    divider = 1024
+  else:
+    suffix = "bytes"
+    divider = 1
+
+  return (suffix, divider)
+
 class SCP(object):
   def _printTotal(self, transferred, total):
-    if total > 1073741824:
-      suffix = "GB"
-      divider = 1073741824
-    elif total > 1048576:
-      suffix = "MB"
-      divider = 1048576
-    elif total > 1024:
-      suffix = "KB"
-      divider = 1024
-    else:
-      suffix = "bytes"
-      divider = 1
+    (suffix, divider) = suffix_and_divider_from_bytes(total)
 
     sys.stdout.write("Transferred %d/%d %s (%d %%)" % (transferred/divider, total/divider, suffix, transferred*100/total)),
     sys.stdout.flush()
@@ -144,10 +149,12 @@ class SRR(object):
     if down_total == 0:
       return
 
+    (suffix, divider) = suffix_and_divider_from_bytes(down_total)
+
     current_mb = int(down_current) / 1048576
     if current_mb > self.last_mb or down_current == down_total:
       self.last_mb = current_mb
-      sys.stdout.write("Transferred %d/%d %s (%d %%)" % (down_current / 1024 / 1024, down_total / 1024 / 1024, "MB", down_current*100/down_total)),
+      sys.stdout.write("Transferred %d/%d %s (%d %%)" % (down_current / divider, down_total / divider, suffix, down_current * 100 / down_total)),
       sys.stdout.flush()
       sys.stdout.write("\r")
 
