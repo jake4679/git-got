@@ -53,7 +53,7 @@ class SCP(object):
     self.direction = "Downloading"
     self.filename = "Unset"
 
-  def _printTotal(self, transferred, total):
+  def _print_total(self, transferred, total):
     print_transfer_string(transferred, total, self.filename, self.direction)
 
   def _get_location_info_scp(self):
@@ -76,7 +76,7 @@ class SCP(object):
     remotefile = '%s.got' % (checksum)
     self.direction = "Downloading"
     self.filename = filename
-    sftp.get(remotefile, filename, callback=self._printTotal)
+    sftp.get(remotefile, filename, callback=self._print_total)
     sys.stdout.write("\n")
     sftp.close()
     ssh.close()
@@ -106,7 +106,7 @@ class SCP(object):
 
     self.direction = "Uploading"
     self.filename = filename
-    sftp.put(filename, remotefile, callback=self._printTotal)
+    sftp.put(filename, remotefile, callback=self._print_total)
     sys.stdout.write("\n")
     sftp.close()
     ssh.close()
