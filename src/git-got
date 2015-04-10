@@ -34,7 +34,7 @@ def printTotal(transferred, total):
     suffix = "bytes"
     divider = 1
 
-  sys.stdout.write("Transferred %d/%d (%d %%) %s" % (transferred/divider, total/divider, transferred*100/total, suffix)),
+  sys.stdout.write("Transferred %d/%d %s (%d %%)" % (transferred/divider, total/divider, suffix, transferred*100/total)),
   sys.stdout.flush()
   sys.stdout.write("\r")
 
@@ -83,7 +83,6 @@ def store_scp(filename, checksum):
     return
   except IOError:
     log_debug("Uploading file to remote...")
-    pass
 
   sftp.put(filename, remotefile, callback=printTotal)
   sys.stdout.write("\n")
