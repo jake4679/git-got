@@ -37,27 +37,28 @@ def print_transfer_string(transferred, total, filename, direction):
   divided_tran = int(transferred / divider)
   divided_total = int(total / divider)
   percent = int(transferred * 100 / total)
-  strlen_no_file = len(direction) + 1 + 1 + len(str(divided_tran)) + 1 + len(str(divided_total)) + 1 + len(suffix) + 2 + 3 + 3
+  strlen_no_file = len(direction) + 1 + 1 + len(str(divided_tran)) + 1 + len(str(divided_total)) + 1 + len(suffix) + 2 + 3 + 2
 
   filenamelen = len(filename)
   if strlen_no_file + len(filename) > 80:
     filenamelen = 80 - strlen_no_file
 
-  sys.stdout.write("{0} {1:.{2}s} {3}/{4} {5} ({6} %)".format(direction, filename, filenamelen, divided_tran, divided_total, suffix, percent))
+  sys.stdout.write("{0} {1:.{2}s} {3}/{4} {5} ({6}%)".format(direction, filename, filenamelen, divided_tran, divided_total, suffix, percent))
 
   sys.stdout.flush()
   sys.stdout.write("\r")
 
 class SCP(object):
-  def __init__(self):
+  def __init__(self, configuration):
     self.direction = "Downloading"
     self.filename = "Unset"
+    self.configuration = configuration
 
   def _print_total(self, transferred, total):
     print_transfer_string(transferred, total, self.filename, self.direction)
 
   def _get_location_info_scp(self):
-    parser = urlparse.urlparse(get_remote())
+    parser = urlparse.urlparse(self.configuration['remote'])
     username = parser.username
     if username is None:
       username = getpass.getuser()
@@ -111,15 +112,19 @@ class SCP(object):
     sftp.close()
     ssh.close()
 
+  def version(self):
+    return self.configuration['version']
+
 class SRR(object):
-  def __init__(self):
+  def __init__(self, configuration):
     self.last_mb = -1
     self.direction = "Downloading"
     self.filename = "Unset"
+    self.configuration = configuration
 
   def _get_location_info_srr(self):
     result_re = re.compile('http://(.*)/.*/(\d+)$')
-    matches = result_re.match(get_remote())
+    matches = result_re.match(self.configuration['remote'])
     return (matches.group(1), matches.group(2))
 
   def store(self, filename, checksum):
@@ -193,15 +198,19 @@ class SRR(object):
 
     sys.stdout.write("\n")
 
-remote_obj = SRR()
+  def version(self):
+    return self.configuration['version']
+
+remote_obj = None
 
 def init_backing_store():
   global remote_obj
-  configuration = load_configuration()
+  with open('.got/storage', 'r') as storagefp:
+    configuration = json.load(storagefp)
   if configuration['remote_type'] == 'srr':
-    remote_obj = SRR()
+    remote_obj = SRR(configuration)
   else:
-    remote_obj = SCP()
+    remote_obj = SCP(configuration)
 
 def usage():
   print 'git got <command> [<args>]'
@@ -218,8 +227,6 @@ def git_add(repo, filename):
   log_debug('git_add: Adding file %s to %s' % (filename, repo))
   dulwich.porcelain.add(repo, filename)
 
-configuration = None
-
 def file_hash(filename):
   hasher = hashlib.sha256()
   with open(filename, 'rb') as infp:
@@ -229,17 +236,6 @@ def file_hash(filename):
         break
       hasher.update(data)
   return hasher.hexdigest()
-
-def load_configuration():
-  global configuration
-  if configuration is None:
-    with open('.got/storage', 'r') as storagefp:
-      configuration = json.load(storagefp)
-  return configuration
-
-def get_remote():
-  configuration = load_configuration()
-  return configuration['remote']
 
 def get_local_got_filename(fully_qualified_filename):
   (base, filename) = os.path.split(fully_qualified_filename)
@@ -357,8 +353,7 @@ def check_initialized():
   return False
 
 def check_version(version):
-  configuration = load_configuration()
-  if VERSION != configuration['version']:
+  if VERSION != remote_obj.version():
     return False
   return True
 
