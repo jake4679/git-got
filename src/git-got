@@ -105,7 +105,7 @@ class SRR(object):
     local_path = filename
     target_id = ''
     remote_path = '%s' % checksum
-    description = 'Got storage for %s/%s @ TBD hashtag' % (get_root(), filename)
+    description = 'Got storage for %s @ TBD hashtag' % (filename)
 
     # first check to see if the file already exists in the SRR
     conn = httplib.HTTPConnection(server_name)
@@ -200,16 +200,6 @@ def reset():
 def git_add(repo, filename):
   log_debug('git_add: Adding file %s to %s' % (filename, repo))
   dulwich.porcelain.add(repo, filename)
-
-def get_root():
-  global root_path
-  if root_path == "":
-    root_path = os.getcwd()
-    old_root_path = ''
-    while not os.path.exists(os.path.join(root_path, '.git')) and root_path is not old_root_path:
-      old_root_path = root_path
-      root_path = os.path.dirname(root_path)
-  return root_path
 
 configuration = None
 
@@ -455,9 +445,9 @@ def main(argv):
   elif command == 'reset':
     walker(reset_cb, repo, argv[2:])
   elif command == 'get':
-    walker(get_cb, repo, [get_root()])
+    walker(get_cb, repo, ['.'])
   elif command == 'status':
-    changes = walker(status_cb, repo, [get_root()])
+    changes = walker(status_cb, repo, ['.'])
     print '# Changes',
     for change in changes:
       if None != change:
