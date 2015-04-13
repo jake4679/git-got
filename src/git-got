@@ -465,11 +465,7 @@ def walker(function, repo, origpath, args):
   for arg in args:
     fullpath = os.path.normpath(os.path.join(origpath, arg))
     logging.debug('walker: processing argument %s' % fullpath)
-    if os.path.isfile(fullpath):
-      logging.debug('walker: processing file %s' % fullpath)
-      (base, filename) = os.path.split(fullpath)
-      output.append(function(repo, os.path.join(base, '.%s.got' % filename), fullpath))
-    else:
+    if os.path.isdir(fullpath):
       for base, dirs, filenames in os.walk(fullpath):
         if '.git' in dirs:
           dirs.remove('.git')
@@ -480,6 +476,13 @@ def walker(function, repo, origpath, args):
           gotpath = os.path.normpath(os.path.join(base, filename))
           logging.debug('walker: processing file %s' % realpath)
           output.append(function(repo, gotpath, realpath))
+    else:
+      # this covers both the case where the argument is a file and the case
+      # where the full path isn't a file at all (which can happen if the local
+      # version of the file was deleted)
+      logging.debug('walker: processing file %s' % fullpath)
+      (base, filename) = os.path.split(fullpath)
+      output.append(function(repo, os.path.join(base, '.%s.got' % filename), fullpath))
   return output
 
 remote_obj = None
