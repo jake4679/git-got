@@ -249,17 +249,14 @@ class SRR(object):
 class File(object):
   def __init__(self, configuration):
     self.configuration = configuration
-    self.block_size = 8192
+    self.block_size = 100
 
-  def store(self, filename, checksum):
-    logging.debug("store_file")
-    parser = urlparse.urlparse(self.configuration['remote'])
-    dstpath = os.path.join(parser.path, checksum + ".got")
-    if os.path.exists(dstpath):
-      logging.debug("File existed on remote, skipping upload...")
-      return
+  def _transfer(self, srcpath, dstpath, direction):
+    print_fname = srcpath
+    if direction == "Downloading":
+      print_fname = dstpath
 
-    src = open(filename, "rb")
+    src = open(srcpath, "rb")
     dst = open(dstpath, "wb")
 
     total_len = os.fstat(src.fileno()).st_size
@@ -274,42 +271,30 @@ class File(object):
       else:
         dst.write(block)
 
-      print_transfer_string(transferred, total_len, filename, "Uploading")
+      print_transfer_string(transferred, total_len, print_fname, direction)
       transferred += self.block_size
 
-    print_transfer_string(total_len, total_len, filename, "Uploading")
+    print_transfer_string(total_len, total_len, print_fname, direction)
     sys.stdout.write("\n")
     dst.close()
     src.close()
+
+  def store(self, filename, checksum):
+    logging.debug("store_file")
+    parser = urlparse.urlparse(self.configuration['remote'])
+    dstpath = os.path.join(parser.path, checksum + ".got")
+    if os.path.exists(dstpath):
+      logging.debug("File existed on remote, skipping upload...")
+      return
+
+    self._transfer(filename, dstpath, "Uploading")
 
   def load(self, filename, checksum):
     logging.debug("load_file")
     parser = urlparse.urlparse(self.configuration['remote'])
 
-    srcpath = os.path.join(parser.path, checksum + ".got")
-
-    src = open(srcpath, "rb")
-    dst = open(filename, "wb")
-
-    total_len = os.fstat(src.fileno()).st_size
-    transferred = 0
-
-    while True:
-      block = src.read(self.block_size)
-
-      if not block:
-        # end of file
-        break
-      else:
-        dst.write(block)
-
-      print_transfer_string(transferred, total_len, filename, "Downloading")
-      transferred += self.block_size
-
-    print_transfer_string(total_len, total_len, filename, "Downloading")
-    sys.stdout.write("\n")
-    dst.close()
-    src.close()
+    self._transfer(os.path.join(parser.path, checksum + ".got"), filename,
+                   "Downloading")
 
   def version(self):
     return self.configuration['version']
