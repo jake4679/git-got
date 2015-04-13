@@ -434,6 +434,8 @@ def status_cb(repo, got_filename, real_filename):
   @param real_filename  Real filename
   """
   try:
+    if not os.path.exists(real_filename):
+      return 'Missing locally: %s' % real_filename
     if not status_local(got_filename, real_filename):
       return 'Modified: %s' % real_filename
   except Exception as e:
