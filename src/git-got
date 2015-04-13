@@ -208,6 +208,74 @@ class SRR(object):
   def version(self):
     return self.configuration['version']
 
+class File(object):
+  def __init__(self, configuration):
+    self.configuration = configuration
+    self.block_size = 8192
+
+  def store(self, filename, checksum):
+    log_debug("store_file")
+    parser = urlparse.urlparse(self.configuration['remote'])
+    dstpath = os.path.join(parser.path, checksum + ".got")
+    if os.path.exists(dstpath):
+      log_debug("File existed on remote, skipping upload...")
+      return
+
+    src = open(filename, "rb")
+    dst = open(dstpath, "wb")
+
+    total_len = os.fstat(src.fileno()).st_size
+    transferred = 0
+
+    while True:
+      block = src.read(self.block_size)
+
+      if not block:
+        # end of file
+        break
+      else:
+        dst.write(block)
+
+      print_transfer_string(transferred, total_len, filename, "Uploading")
+      transferred += self.block_size
+
+    print_transfer_string(total_len, total_len, filename, "Uploading")
+    sys.stdout.write("\n")
+    dst.close()
+    src.close()
+
+  def load(self, filename, checksum):
+    log_debug("load_file")
+    parser = urlparse.urlparse(self.configuration['remote'])
+
+    srcpath = os.path.join(parser.path, checksum + ".got")
+
+    src = open(srcpath, "rb")
+    dst = open(filename, "wb")
+
+    total_len = os.fstat(src.fileno()).st_size
+    transferred = 0
+
+    while True:
+      block = src.read(self.block_size)
+
+      if not block:
+        # end of file
+        break
+      else:
+        dst.write(block)
+
+      print_transfer_string(transferred, total_len, filename, "Downloading")
+      transferred += self.block_size
+
+    print_transfer_string(total_len, total_len, filename, "Downloading")
+    sys.stdout.write("\n")
+    dst.close()
+    src.close()
+
+  def version(self):
+    return self.configuration['version']
+
 remote_obj = None
 
 def init_backing_store():
@@ -216,6 +284,8 @@ def init_backing_store():
     configuration = json.load(storagefp)
   if configuration['remote_type'] == 'srr':
     remote_obj = SRR(configuration)
+  elif configuration['remote_type'] == 'file':
+    remote_obj = File(configuration)
   else:
     remote_obj = SCP(configuration)
 
@@ -432,7 +502,7 @@ def main(argv):
       return 1
 
     remote_type = argv[2]
-    if remote_type != 'srr' and remote_type != 'scp':
+    if remote_type != 'srr' and remote_type != 'scp' and remote_type != 'file':
       usage()
       return 1
 
