@@ -312,10 +312,6 @@ def file_hash(filename):
       hasher.update(data)
   return hasher.hexdigest()
 
-def get_local_got_filename(real_filename):
-  (base, filename) = os.path.split(real_filename)
-  return os.path.join(base, '.%s.got' % filename)
-
 def get_cb(repo, got_filename, real_filename):
   try:
     log_debug('get_cb: Using %s for local file' % real_filename)
@@ -425,7 +421,8 @@ def walker(function, repo, origpath, args):
     log_debug('walker: processing argument %s' % fullpath)
     if os.path.isfile(fullpath):
       log_debug('walker: processing file %s' % fullpath)
-      output.append(function(repo, get_local_got_filename(fullpath), fullpath))
+      (base, filename) = os.path.split(fullpath)
+      output.append(function(repo, os.path.join(base, '.%s.got' % filename), fullpath))
     else:
       for base, dirs, filenames in os.walk(fullpath):
         if '.git' in dirs:
