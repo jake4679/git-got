@@ -287,19 +287,6 @@ class File(object):
   def version(self):
     return self.configuration['version']
 
-remote_obj = None
-
-def init_backing_store():
-  global remote_obj
-  with open('.got/storage', 'r') as storagefp:
-    configuration = json.load(storagefp)
-  if configuration['remote_type'] == 'srr':
-    remote_obj = SRR(configuration)
-  elif configuration['remote_type'] == 'file':
-    remote_obj = File(configuration)
-  else:
-    remote_obj = SCP(configuration)
-
 def usage():
   print 'git got <command> [<args>]'
   print
@@ -435,9 +422,19 @@ def walker(function, repo, origpath, args):
           output.append(function(repo, '%s/%s' % (base, filename)))
   return output
 
+remote_obj = None
+
 def check_initialized():
+  global remote_obj
   if os.path.isfile('.got/storage'):
-    init_backing_store()
+    with open('.got/storage', 'r') as storagefp:
+      configuration = json.load(storagefp)
+    if configuration['remote_type'] == 'srr':
+      remote_obj = SRR(configuration)
+    elif configuration['remote_type'] == 'file':
+      remote_obj = File(configuration)
+    else:
+      remote_obj = SCP(configuration)
     return True
   return False
 
