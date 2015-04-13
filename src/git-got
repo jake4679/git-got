@@ -404,8 +404,7 @@ def add_cb(repo, got_filename, real_filename):
 def status_local(got_filename, real_filename):
   """
   Determines if there are local changes made to the file specified in the
-  filename parameter.  Assumes filename is the fully qualified name of a got
-  meta file.
+  filename parameter.
 
   @param got_filename   Got meta filename
   @param real_filename  Real filename
@@ -652,7 +651,7 @@ def main(argv):
       usage()
       return 1
 
-    # for add, we only allow adding files (not subdirectories); check that here
+    # we only allow adding files (not subdirectories); check that here
     for arg in args[1:]:
       if not os.path.isfile(os.path.join(origpath, arg)):
         print("git-got only allows files, not subdirectories, to be added")
@@ -667,8 +666,7 @@ def main(argv):
       usage()
       return 1
 
-    # for reset, we only allow adding files (not subdirectories); check that
-    # here
+    # we only allow resetting files (not subdirectories); check that here
     for arg in args[1:]:
       if not os.path.isfile(os.path.join(origpath, arg)):
         print("git-got only allows files, not subdirectories, to be reset")
