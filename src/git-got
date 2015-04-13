@@ -457,6 +457,12 @@ def walker(function, repo, origpath, args):
 remote_obj = None
 
 def check_initialized():
+  """
+  Function to look for got initialization, and open up the configuration if
+  found.
+
+  @return True if the got configuration file was found, False otherwise
+  """
   global remote_obj
   if os.path.isfile('.got/storage'):
     with open('.got/storage', 'r') as storagefp:
@@ -561,9 +567,17 @@ def main(argv):
 
   logging.basicConfig(level=loglevel, format=logformat)
 
-  origpath = find_git_path_and_chdir()
+  try:
+    origpath = find_git_path_and_chdir()
+  except Exception as e:
+    logging.error("Failed to initialize git-got: %s" % (str(e)))
+    return 1
 
-  repo = dulwich.porcelain.open_repo(".")
+  try:
+    repo = dulwich.porcelain.open_repo(".")
+  except Exception as e:
+    logging.error(str(e))
+    return 1
 
   command = args[0]
 
