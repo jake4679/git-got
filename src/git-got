@@ -100,8 +100,8 @@ class SCP(object):
     logging.debug("load_scp")
     (hostname, remote_dir, username) = self._get_location_info_scp()
     logging.debug("hostname: %s, remote_dir: %s, username: %s" % (hostname,
-                                                              remote_dir,
-                                                              username))
+                                                                  remote_dir,
+                                                                  username))
     ssh = paramiko.SSHClient()
     ssh.load_host_keys(os.path.expanduser(os.path.join("~", ".ssh", "known_hosts")))
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -120,8 +120,8 @@ class SCP(object):
     logging.debug("store_scp")
     (hostname, remote_dir, username) = self._get_location_info_scp()
     logging.debug("hostname: %s, remote_dir: %s, username: %s" % (hostname,
-                                                              remote_dir,
-                                                              username))
+                                                                  remote_dir,
+                                                                  username))
     ssh = paramiko.SSHClient()
     ssh.load_host_keys(os.path.expanduser(os.path.join("~", ".ssh", "known_hosts")))
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
