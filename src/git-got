@@ -15,6 +15,7 @@ import re
 import paramiko
 import urlparse
 import getpass
+import getopt
 
 DEFAULT_LOG_LEVELS=['INFO', 'WARN', 'ERROR']
 
@@ -288,15 +289,21 @@ class File(object):
     return self.configuration['version']
 
 def usage():
-  print 'git got <command> [<args>]'
-  print
-  print 'The most commonly used git got commands are:'
-  print '  init   Initialize the remote to be used with the repository'
-  print '    <repository type> <parameters>'
-  print '  get    Retrieve all remote files to the local working area'
-  print '  add    Add a file to the remote repository'
-  print '  status Request the status of a got tracked file'
-  print '  reset  Ovewrite a gotted file with the remote copy'
+  print("git got <command> [<args>]")
+  print("")
+  print("The available git got commands are:")
+  print("  init <type> <url>   Initialize the remote to be used with the repository,")
+  print("                      where <type> is one of 'scp', 'srr', or 'file'.")
+  print("  get [<file>...]     With no arguments, retrieve all remote files to the local")
+  print("                      working area.  With one or more arguments, retrieve just")
+  print("                      those remote files to the local working area.")
+  print("  add <file>...       Add one or more files to the remote repository.  Note")
+  print("                      that directories are not allowed.")
+  print("  status [<file>...]  With no arguments, request the status of all got")
+  print("                      tracked files.  With one or more arguments, request")
+  print("                      just the status of the named files.")
+  print("  reset <file>...     Overwrite one or more local got files with the remote")
+  print("                      copy.  Note that directories are not allowed.")
 
 def git_add(repo, filename):
   log_debug('git_add: Adding file %s to %s' % (filename, repo))
@@ -505,24 +512,42 @@ def find_git_path_and_chdir():
   return os.path.relpath(origpath, os.path.commonprefix([origpath, os.getcwd()]))
 
 def main(argv):
+  try:
+    opts, args = getopt.gnu_getopt(argv[1:], 'd:h', ['debug', 'help'])
+  except getopt.GetoptError as err:
+    print(str(err))
+    usage()
+    return 1
+
+  for o, a in opts:
+    if o in ("-d", "--debug"):
+      try:
+        d_int = int(a)
+      except ValueError:
+        usage()
+        return 1
+    elif o in ("-h", "--help"):
+      usage()
+      return 0
+
   origpath = find_git_path_and_chdir()
 
   repo = dulwich.porcelain.open_repo(".")
 
-  command = argv[1]
+  command = args[0]
 
   # For bootstrapping purposes we have to check if the command is "init" first.
   if command == 'init':
-    if len(argv) != 4:
+    if len(args) != 3:
       usage()
       return 1
 
-    remote_type = argv[2]
+    remote_type = args[1]
     if remote_type != 'srr' and remote_type != 'scp' and remote_type != 'file':
       usage()
       return 1
 
-    remote = argv[3]
+    remote = args[2]
     mkdir_p('.got')
     configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION }
     with open('.got/storage', 'w') as storagefile:
@@ -538,7 +563,7 @@ def main(argv):
   # If an upgrade is required, it really needs to be before we check the
   # version or we have a chicken and egg problem.
   if command == 'upgrade':
-    if len(argv) != 2:
+    if len(args) != 1:
       usage()
       return 1
 
@@ -551,32 +576,34 @@ def main(argv):
     return 1
 
   if command == 'add':
-    if len(argv) < 2:
+    if len(args) < 1:
       usage()
       return 1
 
     # for add, we only allow adding files (not subdirectories); check that here
-    for arg in argv[2:]:
+    for arg in args[1:]:
       if not os.path.isfile(os.path.join(origpath, arg)):
         print "git-got only allows files, not subdirectories, to be added"
         usage()
         return 1
 
-    walker(add_cb, repo, origpath, argv[2:])
+    walker(add_cb, repo, origpath, args[1:])
 
     return 0
   elif command == 'reset':
-    if len(argv) < 2:
+    if len(args) < 1:
       usage()
       return 1
 
-    walker(reset_cb, repo, origpath, argv[2:])
+    # FIXME: only allow files, not directories
+
+    walker(reset_cb, repo, origpath, args[1:])
     return 0
   elif command == 'get':
-    if len(argv) == 2:
+    if len(args) == 1:
       path = ['.']
-    elif len(argv) > 2:
-      path = argv[2:]
+    elif len(args) > 1:
+      path = args[1:]
     else:
       usage()
       return 1
@@ -584,10 +611,10 @@ def main(argv):
     walker(get_cb, repo, origpath, path)
     return 0
   elif command == 'status':
-    if len(argv) == 2:
+    if len(args) == 1:
       path = ['.']
-    elif len(argv) > 2:
-      path = argv[2:]
+    elif len(args) > 1:
+      path = args[1:]
     else:
       usage()
       return 1
