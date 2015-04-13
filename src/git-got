@@ -316,10 +316,6 @@ def get_local_got_filename(real_filename):
   (base, filename) = os.path.split(real_filename)
   return os.path.join(base, '.%s.got' % filename)
 
-def get_real_filename(got_filename):
-  (base, filename) = os.path.split(got_filename)
-  return os.path.normpath(os.path.join(base, filename[1:-4]))
-
 def get_cb(repo, got_filename, real_filename):
   try:
     log_debug('get_cb: Using %s for local file' % real_filename)
@@ -437,7 +433,7 @@ def walker(function, repo, origpath, args):
         if '.got' in dirs:
           dirs.remove('.got')
         for filename in fnmatch.filter(filenames, '.*.got'):
-          realpath = os.path.normpath(os.path.join(base, get_real_filename(filename)))
+          realpath = os.path.normpath(os.path.join(base, filename[1:-4]))
           gotpath = os.path.normpath(os.path.join(base, filename))
           log_debug('walker: processing file %s' % realpath)
           output.append(function(repo, gotpath, realpath))
