@@ -535,7 +535,6 @@ def main(argv):
     usage()
     return 1
   elif command == 'add':
-    log_debug('main: Add command %s' % argv[2:])
     walker(add_cb, repo, origpath, argv[2:])
   elif command == 'reset':
     walker(reset_cb, repo, origpath, argv[2:])
