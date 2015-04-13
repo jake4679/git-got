@@ -9,7 +9,7 @@ import requests
 import pycurl
 import dulwich.porcelain
 import errno
-from requests_toolbelt.multipart.encoder import MultipartEncoder
+import requests_toolbelt.multipart.encoder
 import httplib
 import re
 import paramiko
@@ -118,14 +118,18 @@ class SCP(object):
 class SRR(object):
   def __init__(self, configuration):
     self.last_mb = -1
-    self.direction = "Downloading"
     self.filename = "Unset"
     self.configuration = configuration
+    self.upload_len = -1
 
   def _get_location_info_srr(self):
     result_re = re.compile('http://(.*)/.*/(\d+)$')
     matches = result_re.match(self.configuration['remote'])
     return (matches.group(1), matches.group(2))
+
+  def upload_cb(self, monitor):
+    print_transfer_string(monitor.bytes_read, self.upload_len, self.filename,
+                          "Uploading")
 
   def store(self, filename, checksum):
     log_debug("store_srr")
@@ -148,11 +152,15 @@ class SRR(object):
     # to upload it
     log_debug("Uploading file to remote...")
 
-    m = MultipartEncoder(fields={
+    e = requests_toolbelt.multipart.encoder.MultipartEncoder(fields={
       'parent_id' : parent_id,
       'target_id' : '',
       'description' : description,
       'file' : (checksum, open(filename, 'rb'), 'application/octet-stream')})
+    self.upload_len = len(e)
+    self.filename = filename
+    m = requests_toolbelt.multipart.encoder.MultipartEncoderMonitor(e, self.upload_cb)
+
     response = requests.post('http://%s/srr/api/add_file' % server_name, data = m, headers = {'Content-Type' : m.content_type})
 
     if response.status_code != 200:
@@ -175,7 +183,7 @@ class SRR(object):
     current_mb = int(down_current) / 1048576
     if current_mb > self.last_mb or down_current == down_total:
       self.last_mb = current_mb
-      print_transfer_string(down_current, down_total, self.filename, self.direction)
+      print_transfer_string(down_current, down_total, self.filename, "Downloading")
 
   def load(self, filename, checksum):
     log_debug("load_srr")
@@ -185,7 +193,6 @@ class SRR(object):
     log_debug("load_srr, filename %s, path %s" % (filename, path))
 
     self.last_mb = -1
-    self.direction = "Downloading"
     self.filename = filename
     with open(filename, 'wb') as f:
       c = pycurl.Curl()
