@@ -623,6 +623,11 @@ def main(argv):
       usage()
       return 1
 
+    # here, make sure we don't blow away an already configuration got repository
+    if os.path.isfile('.got/storage'):
+      print('Got backend already initialized!')
+      return 1
+
     remote = args[2]
     mkdir_p('.got')
     configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION }
