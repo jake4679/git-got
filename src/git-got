@@ -249,7 +249,7 @@ class SRR(object):
 class File(object):
   def __init__(self, configuration):
     self.configuration = configuration
-    self.block_size = 100
+    self.block_size = 8192
 
   def _transfer(self, srcpath, dstpath, direction):
     print_fname = srcpath
