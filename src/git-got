@@ -43,7 +43,12 @@ def print_transfer_string(transferred, total, filename, direction):
   if strlen_no_file + len(filename) > 80:
     filenamelen = 80 - strlen_no_file
 
-  sys.stdout.write("{0} {1:.{2}s} {3}/{4} {5} ({6}%)".format(direction, filename, filenamelen, divided_tran, divided_total, suffix, percent))
+  sys.stdout.write("{0} {1:.{2}s} {3}/{4} {5} ({6}%)".format(direction,
+                                                             filename,
+                                                             filenamelen,
+                                                             divided_tran,
+                                                             divided_total,
+                                                             suffix, percent))
 
   sys.stdout.flush()
   sys.stdout.write("\r")
@@ -67,7 +72,9 @@ class SCP(object):
   def load(self, filename, checksum):
     log_debug("load_scp")
     (hostname, remote_dir, username) = self._get_location_info_scp()
-    log_debug("hostname: %s, remote_dir: %s, username: %s" % (hostname, remote_dir, username))
+    log_debug("hostname: %s, remote_dir: %s, username: %s" % (hostname,
+                                                              remote_dir,
+                                                              username))
     ssh = paramiko.SSHClient()
     ssh.load_host_keys(os.path.expanduser(os.path.join("~", ".ssh", "known_hosts")))
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -85,7 +92,9 @@ class SCP(object):
   def store(self, filename, checksum):
     log_debug("store_scp")
     (hostname, remote_dir, username) = self._get_location_info_scp()
-    log_debug("hostname: %s, remote_dir: %s, username: %s" % (hostname, remote_dir, username))
+    log_debug("hostname: %s, remote_dir: %s, username: %s" % (hostname,
+                                                              remote_dir,
+                                                              username))
     ssh = paramiko.SSHClient()
     ssh.load_host_keys(os.path.expanduser(os.path.join("~", ".ssh", "known_hosts")))
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -159,7 +168,8 @@ class SRR(object):
       'file' : (checksum, open(filename, 'rb'), 'application/octet-stream')})
     self.upload_len = len(e)
     self.filename = filename
-    m = requests_toolbelt.multipart.encoder.MultipartEncoderMonitor(e, self.upload_cb)
+    m = requests_toolbelt.multipart.encoder.MultipartEncoderMonitor(e,
+                                                                    self.upload_cb)
 
     response = requests.post('http://%s/srr/api/add_file' % server_name, data = m, headers = {'Content-Type' : m.content_type})
 
@@ -183,7 +193,8 @@ class SRR(object):
     current_mb = int(down_current) / 1048576
     if current_mb > self.last_mb or down_current == down_total:
       self.last_mb = current_mb
-      print_transfer_string(down_current, down_total, self.filename, "Downloading")
+      print_transfer_string(down_current, down_total, self.filename,
+                            "Downloading")
 
   def load(self, filename, checksum):
     log_debug("load_srr")
