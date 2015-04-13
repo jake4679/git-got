@@ -70,6 +70,7 @@ def print_transfer_string(transferred, total, filename, direction):
   if strlen_no_file + len(filename) > 80:
     filenamelen = 80 - strlen_no_file
 
+  sys.stdout.write("\r")
   sys.stdout.write("{0} {1:.{2}s} {3}/{4} {5} ({6}%)".format(direction,
                                                              filename,
                                                              filenamelen,
@@ -78,7 +79,6 @@ def print_transfer_string(transferred, total, filename, direction):
                                                              suffix, percent))
 
   sys.stdout.flush()
-  sys.stdout.write("\r")
 
 class SCP(object):
   def __init__(self, configuration):
@@ -159,9 +159,8 @@ class SRR(object):
     self.upload_len = -1
 
   def _get_location_info_srr(self):
-    result_re = re.compile('http://(.*)/.*/(\d+)$')
-    matches = result_re.match(self.configuration['remote'])
-    return (matches.group(1), matches.group(2))
+    parser = urlparse.urlparse(self.configuration['remote'])
+    return (parser.hostname, os.path.basename(parser.path))
 
   def upload_cb(self, monitor):
     print_transfer_string(monitor.bytes_read, self.upload_len, self.filename,
@@ -202,6 +201,7 @@ class SRR(object):
 
     if response.status_code != 200:
       raise SRRError("%s: %s" % (response.reason, result))
+    sys.stdout.write("\n")
     new_id_re = re.compile(r' file_id=(\d+)\s*$')
     m = new_id_re.search(response.text)
     if m:
