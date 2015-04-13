@@ -416,15 +416,16 @@ def log_debug(message, exception = None):
 def upgrade_cb(new):
   pass
 
-def walker(function, repo, args):
+def walker(function, repo, origpath, args):
   output = []
   for arg in args:
-    log_debug('walker: processing argument %s' % arg)
-    if os.path.isfile(arg):
-      log_debug('walker: processing file %s' % arg)
-      output.append(function(repo, arg))
+    fullpath = os.path.join(origpath, arg)
+    log_debug('walker: processing argument %s' % fullpath)
+    if os.path.isfile(fullpath):
+      log_debug('walker: processing file %s' % fullpath)
+      output.append(function(repo, fullpath))
     else:
-      for base, dirs, filenames in os.walk(arg):
+      for base, dirs, filenames in os.walk(fullpath):
         if '.git' in dirs:
           dirs.remove('.git')
         if '.got' in dirs:
@@ -538,13 +539,13 @@ def main(argv):
     return 1
   elif command == 'add':
     log_debug('main: Add command %s' % argv[2:])
-    walker(add_cb, repo, argv[2:])
+    walker(add_cb, repo, origpath, argv[2:])
   elif command == 'reset':
-    walker(reset_cb, repo, argv[2:])
+    walker(reset_cb, repo, origpath, argv[2:])
   elif command == 'get':
-    walker(get_cb, repo, ['.'])
+    walker(get_cb, repo, origpath, ['.'])
   elif command == 'status':
-    changes = walker(status_cb, repo, ['.'])
+    changes = walker(status_cb, repo, origpath, ['.'])
     print '# Changes',
     for change in changes:
       if None != change:
