@@ -628,7 +628,7 @@ def main(argv):
     return 0
 
   if not check_initialized():
-    print 'Got not initialized\n'
+    print('Got not initialized\n')
     usage()
     return 1
 
@@ -643,7 +643,7 @@ def main(argv):
     return 0
 
   if not check_version(VERSION):
-    print 'Version of got repository requires upgrading, run upgrade command'
+    print('Version of got repository requires upgrading, run upgrade command')
     usage()
     return 1
 
@@ -655,7 +655,7 @@ def main(argv):
     # for add, we only allow adding files (not subdirectories); check that here
     for arg in args[1:]:
       if not os.path.isfile(os.path.join(origpath, arg)):
-        print "git-got only allows files, not subdirectories, to be added"
+        print("git-got only allows files, not subdirectories, to be added")
         usage()
         return 1
 
@@ -671,7 +671,7 @@ def main(argv):
     # here
     for arg in args[1:]:
       if not os.path.isfile(os.path.join(origpath, arg)):
-        print "git-got only allows files, not subdirectories, to be reset"
+        print("git-got only allows files, not subdirectories, to be reset")
         usage()
         return 1
 
@@ -698,11 +698,11 @@ def main(argv):
       return 1
 
     changes = walker(status_cb, repo, origpath, path)
-    print '# Changes',
+    print('# Changes')
     for change in changes:
       if None != change:
-        print '\n# %s' % change,
-    print '\n',
+        print('# %s' % change)
+    print("")
     return 0
   else:
     usage()
