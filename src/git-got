@@ -439,9 +439,7 @@ def check_initialized():
   return False
 
 def check_version(version):
-  if VERSION != remote_obj.version():
-    return False
-  return True
+  return VERSION == remote_obj.version()
 
 VERSION = 1
 
