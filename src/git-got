@@ -320,9 +320,8 @@ def get_real_filename(got_filename):
   (base, filename) = os.path.split(got_filename)
   return os.path.normpath(os.path.join(base, filename[1:-4]))
 
-def get_cb(repo, real_filename):
+def get_cb(repo, got_filename, real_filename):
   try:
-    got_filename = get_local_got_filename(real_filename)
     log_debug('get_cb: Using %s for local file' % real_filename)
     if status_local(got_filename, real_filename):
       log_debug("File already exists, and has right checksum; skipping download...")
@@ -332,12 +331,11 @@ def get_cb(repo, real_filename):
   except Exception as e:
     log_error('Failed to retrieve file %s' % real_filename, e)
 
-def reset_cb(repo, real_filename):
+def reset_cb(repo, got_filename, real_filename):
   try:
     # FIXME: here we need to check if the local file is already unmodified, and
     # if so, do nothing
     log_debug('reset_cb: Resetting %s' % real_filename)
-    got_filename = get_local_got_filename(real_filename)
     if status_local(got_filename, real_filename):
       log_debug("File already exists locally, no need for work")
       return
@@ -346,12 +344,11 @@ def reset_cb(repo, real_filename):
   except Exception as e:
     log_error('Failed to reset %s' % real_filename, e)
 
-def add_cb(repo, real_filename):
+def add_cb(repo, got_filename, real_filename):
   try:
     log_debug('add_cb: Adding %s' % real_filename)
     csum = file_hash(real_filename)
     remote_obj.store(real_filename, csum)
-    got_filename = get_local_got_filename(real_filename)
     with open(got_filename, 'w') as hash_file:
       hash_file.write('%s' % csum)
     git_add(repo, got_filename)
@@ -386,7 +383,7 @@ def status_local(got_filename, real_filename):
     log_error('status_local: Failed to status %s' % real_filename, e)
     return False
 
-def status_cb(repo, real_filename):
+def status_cb(repo, got_filename, real_filename):
   """
   Retrieves the status of the filename specified.  Invoked from the main
   walker loop.  Assumes the filename passed in is a got meta file.
@@ -394,7 +391,6 @@ def status_cb(repo, real_filename):
   @param filename Name of the got meta file to check
   """
   try:
-    got_filename = get_local_got_filename(real_filename)
     if not status_local(got_filename, real_filename):
       return 'Modified: %s' % real_filename
   except Exception as e:
@@ -433,7 +429,7 @@ def walker(function, repo, origpath, args):
     log_debug('walker: processing argument %s' % fullpath)
     if os.path.isfile(fullpath):
       log_debug('walker: processing file %s' % fullpath)
-      output.append(function(repo, fullpath))
+      output.append(function(repo, get_local_got_filename(fullpath), fullpath))
     else:
       for base, dirs, filenames in os.walk(fullpath):
         if '.git' in dirs:
@@ -441,9 +437,10 @@ def walker(function, repo, origpath, args):
         if '.got' in dirs:
           dirs.remove('.got')
         for filename in fnmatch.filter(filenames, '.*.got'):
-          fullpath = os.path.normpath(os.path.join(base, get_real_filename(filename)))
-          log_debug('walker: processing file %s' % fullpath)
-          output.append(function(repo, fullpath))
+          realpath = os.path.normpath(os.path.join(base, get_real_filename(filename)))
+          gotpath = os.path.normpath(os.path.join(base, filename))
+          log_debug('walker: processing file %s' % realpath)
+          output.append(function(repo, gotpath, realpath))
   return output
 
 remote_obj = None
@@ -572,8 +569,7 @@ def main(argv):
         usage()
         return 1
 
-    for arg in argv[2:]:
-      add_cb(repo, os.path.normpath(os.path.join(origpath, arg)))
+    walker(add_cb, repo, origpath, argv[2:])
 
     return 0
   elif command == 'reset':
