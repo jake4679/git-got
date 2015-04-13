@@ -303,10 +303,23 @@ def usage():
   print("                      copy.  Note that directories are not allowed.")
 
 def git_add(repo, filename):
+  """
+  Add a file to the git database.
+
+  @param repo      Dulwich repository object
+  @param filename  The file to add to the git database
+  """
   logging.debug('git_add: Adding file %s to %s' % (filename, repo))
   dulwich.porcelain.add(repo, filename)
 
 def file_hash(filename):
+  """
+  Hash the contents of the specified file using SHA-256 and return the hash
+  as a string.
+
+  @param filename  The filename to hash the contents of
+  @return String representing the SHA-256 hash of the file contents
+  """
   hasher = hashlib.sha256()
   with open(filename, 'rb') as infp:
     while True:
@@ -317,6 +330,13 @@ def file_hash(filename):
   return hasher.hexdigest()
 
 def get_cb(repo, got_filename, real_filename):
+  """
+  Fetches the specified file from the remote if necessary.
+
+  @param repo           Dulwich repository object
+  @param got_filename   Got meta filename
+  @param real_filename  Real filename
+  """
   try:
     logging.debug('get_cb: Using %s for local file' % real_filename)
     if status_local(got_filename, real_filename):
@@ -325,9 +345,17 @@ def get_cb(repo, got_filename, real_filename):
     logging.debug("Downloading remote file...")
     remote_obj.load(real_filename, open(got_filename).read().rstrip())
   except Exception as e:
-    logging.error('Failed to retrieve file %s' % real_filename, e)
+    logging.error('Failed to retrieve file %s: %s' % (real_filename, str(e)))
 
 def reset_cb(repo, got_filename, real_filename):
+  """
+  Resets the specified file to the version from the got database, re-downloading
+  it from the remote if necessary.
+
+  @param repo           Dulwich repository object
+  @param got_filename   Got meta filename
+  @param real_filename  Real filename
+  """
   try:
     # FIXME: here we need to check if the local file is already unmodified, and
     # if so, do nothing
@@ -338,9 +366,16 @@ def reset_cb(repo, got_filename, real_filename):
     logging.debug('reset_cb: Using %s for local got file' % got_filename)
     remote_obj.load(real_filename, open(got_filename).read().rstrip())
   except Exception as e:
-    logging.error('Failed to reset %s' % real_filename, e)
+    logging.error('Failed to reset %s: %s' % (real_filename, str(e)))
 
 def add_cb(repo, got_filename, real_filename):
+  """
+  Adds a new file to the got database and uploads it to the remote.
+
+  @param repo           Dulwich repository object
+  @param got_filename   Got meta filename
+  @param real_filename  Real filename
+  """
   try:
     logging.debug('add_cb: Adding %s' % real_filename)
     csum = file_hash(real_filename)
@@ -352,8 +387,7 @@ def add_cb(repo, got_filename, real_filename):
       gitignorefile.write('%s\n' % real_filename)
     git_add(repo, '.gitignore')
   except Exception as e:
-    print sys.exc_traceback.tb_lineno
-    logging.error('Failed to add %s' % real_filename, e)
+    logging.error('Failed to add %s: %s' % (real_filename, str(e)))
 
 def status_local(got_filename, real_filename):
   """
@@ -361,9 +395,9 @@ def status_local(got_filename, real_filename):
   filename parameter.  Assumes filename is the fully qualified name of a got
   meta file.
 
-  @filename Got meta filename
-  @return 1 if The file is unchanged
-  @return 0 if the file is changed or not found
+  @param got_filename   Got meta filename
+  @param real_filename  Real filename
+  @return True if The file is unchanged, False if the file is changed or not found
   """
   try:
     if not os.path.exists(real_filename):
@@ -382,15 +416,17 @@ def status_local(got_filename, real_filename):
 def status_cb(repo, got_filename, real_filename):
   """
   Retrieves the status of the filename specified.  Invoked from the main
-  walker loop.  Assumes the filename passed in is a got meta file.
+  walker loop.
 
-  @param filename Name of the got meta file to check
+  @param repo           Dulwich repository object
+  @param got_filename   Got meta filename
+  @param real_filename  Real filename
   """
   try:
     if not status_local(got_filename, real_filename):
       return 'Modified: %s' % real_filename
   except Exception as e:
-    logging.error('Failed to status %s' % real_filename, e)
+    logging.error('Failed to get status of %s: %s' % (real_filename, str(e)))
 
 def upgrade_cb(new):
   pass
