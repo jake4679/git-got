@@ -595,7 +595,13 @@ def main(argv):
       usage()
       return 1
 
-    # FIXME: only allow files, not directories
+    # for reset, we only allow adding files (not subdirectories); check that
+    # here
+    for arg in args[1:]:
+      if not os.path.isfile(os.path.join(origpath, arg)):
+        print "git-got only allows files, not subdirectories, to be reset"
+        usage()
+        return 1
 
     walker(reset_cb, repo, origpath, args[1:])
     return 0
