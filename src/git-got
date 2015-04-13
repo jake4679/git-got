@@ -419,7 +419,7 @@ def upgrade_cb(new):
 def walker(function, repo, origpath, args):
   output = []
   for arg in args:
-    fullpath = os.path.join(origpath, arg)
+    fullpath = os.path.normpath(os.path.join(origpath, arg))
     log_debug('walker: processing argument %s' % fullpath)
     if os.path.isfile(fullpath):
       log_debug('walker: processing file %s' % fullpath)
