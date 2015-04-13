@@ -459,6 +459,21 @@ def upgrade_cb(new):
   pass
 
 def walker(function, repo, origpath, args):
+  """
+  A function to walk down a list of files/directories, calling a callback on
+  each one.  The callback is expected to have a signature of:
+
+  cb(repo, got_filename, real_filename)
+
+  @param function  The function to call on each got managed file
+  @param repo      Dulwich repository object to pass into the callback
+  @param origpath  The original current working directory when got was invoked,
+                   used to figure out the appropriate paths
+  @param args      The list of files/directories to walk
+
+  @return A string built from the output of all invocations of the callback
+          function.
+  """
   output = []
   logging.debug("walker: args: " + str(args))
   for arg in args:
