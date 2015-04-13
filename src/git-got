@@ -481,6 +481,8 @@ def mkdir_p(path):
   necessary.  The functionality differs from os.makedirs slightly, in
   that this function does *not* raise an error if the directory already
   exists.
+
+  @param path  The directory path to create
   """
   if path is None:
     raise Exception("Path cannot be None")
