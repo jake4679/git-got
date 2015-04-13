@@ -16,10 +16,7 @@ import paramiko
 import urlparse
 import getpass
 import getopt
-
-DEFAULT_LOG_LEVELS=['INFO', 'WARN', 'ERROR']
-
-LOG_LEVELS = DEFAULT_LOG_LEVELS
+import logging
 
 def print_transfer_string(transferred, total, filename, direction):
   if total > 1073741824:
@@ -71,9 +68,9 @@ class SCP(object):
     return (parser.hostname, parser.path, username)
 
   def load(self, filename, checksum):
-    log_debug("load_scp")
+    logging.debug("load_scp")
     (hostname, remote_dir, username) = self._get_location_info_scp()
-    log_debug("hostname: %s, remote_dir: %s, username: %s" % (hostname,
+    logging.debug("hostname: %s, remote_dir: %s, username: %s" % (hostname,
                                                               remote_dir,
                                                               username))
     ssh = paramiko.SSHClient()
@@ -91,9 +88,9 @@ class SCP(object):
     ssh.close()
 
   def store(self, filename, checksum):
-    log_debug("store_scp")
+    logging.debug("store_scp")
     (hostname, remote_dir, username) = self._get_location_info_scp()
-    log_debug("hostname: %s, remote_dir: %s, username: %s" % (hostname,
+    logging.debug("hostname: %s, remote_dir: %s, username: %s" % (hostname,
                                                               remote_dir,
                                                               username))
     ssh = paramiko.SSHClient()
@@ -108,12 +105,12 @@ class SCP(object):
     # already exists, we don't need to upload it again.  Just get out of here
     try:
       sftp.stat(remotefile)
-      log_debug("File existed on remote, skipping upload...")
+      logging.debug("File existed on remote, skipping upload...")
       sftp.close()
       ssh.close()
       return
     except IOError:
-      log_debug("Uploading file to remote...")
+      logging.debug("Uploading file to remote...")
 
     self.direction = "Uploading"
     self.filename = filename
@@ -142,7 +139,7 @@ class SRR(object):
                           "Uploading")
 
   def store(self, filename, checksum):
-    log_debug("store_srr")
+    logging.debug("store_srr")
     (server_name, parent_id) = self._get_location_info_srr()
     local_path = filename
     target_id = ''
@@ -155,12 +152,12 @@ class SRR(object):
     response = conn.getresponse()
     conn.close()
     if response.status == 200:
-      log_debug("File existed on remote, skipping upload...")
+      logging.debug("File existed on remote, skipping upload...")
       return
 
     # if the response was 404, the object was not in the store and thus we need
     # to upload it
-    log_debug("Uploading file to remote...")
+    logging.debug("Uploading file to remote...")
 
     e = requests_toolbelt.multipart.encoder.MultipartEncoder(fields={
       'parent_id' : parent_id,
@@ -198,11 +195,11 @@ class SRR(object):
                             "Downloading")
 
   def load(self, filename, checksum):
-    log_debug("load_srr")
+    logging.debug("load_srr")
     (server, parent_id) = self._get_location_info_srr()
 
     path = self._get_remote_path_srr(server, checksum)
-    log_debug("load_srr, filename %s, path %s" % (filename, path))
+    logging.debug("load_srr, filename %s, path %s" % (filename, path))
 
     self.last_mb = -1
     self.filename = filename
@@ -226,11 +223,11 @@ class File(object):
     self.block_size = 8192
 
   def store(self, filename, checksum):
-    log_debug("store_file")
+    logging.debug("store_file")
     parser = urlparse.urlparse(self.configuration['remote'])
     dstpath = os.path.join(parser.path, checksum + ".got")
     if os.path.exists(dstpath):
-      log_debug("File existed on remote, skipping upload...")
+      logging.debug("File existed on remote, skipping upload...")
       return
 
     src = open(filename, "rb")
@@ -257,7 +254,7 @@ class File(object):
     src.close()
 
   def load(self, filename, checksum):
-    log_debug("load_file")
+    logging.debug("load_file")
     parser = urlparse.urlparse(self.configuration['remote'])
 
     srcpath = os.path.join(parser.path, checksum + ".got")
@@ -306,7 +303,7 @@ def usage():
   print("                      copy.  Note that directories are not allowed.")
 
 def git_add(repo, filename):
-  log_debug('git_add: Adding file %s to %s' % (filename, repo))
+  logging.debug('git_add: Adding file %s to %s' % (filename, repo))
   dulwich.porcelain.add(repo, filename)
 
 def file_hash(filename):
@@ -321,31 +318,31 @@ def file_hash(filename):
 
 def get_cb(repo, got_filename, real_filename):
   try:
-    log_debug('get_cb: Using %s for local file' % real_filename)
+    logging.debug('get_cb: Using %s for local file' % real_filename)
     if status_local(got_filename, real_filename):
-      log_debug("File already exists, and has right checksum; skipping download...")
+      logging.debug("File already exists, and has right checksum; skipping download...")
       return
-    log_debug("Downloading remote file...")
+    logging.debug("Downloading remote file...")
     remote_obj.load(real_filename, open(got_filename).read().rstrip())
   except Exception as e:
-    log_error('Failed to retrieve file %s' % real_filename, e)
+    logging.error('Failed to retrieve file %s' % real_filename, e)
 
 def reset_cb(repo, got_filename, real_filename):
   try:
     # FIXME: here we need to check if the local file is already unmodified, and
     # if so, do nothing
-    log_debug('reset_cb: Resetting %s' % real_filename)
+    logging.debug('reset_cb: Resetting %s' % real_filename)
     if status_local(got_filename, real_filename):
-      log_debug("File already exists locally, no need for work")
+      logging.debug("File already exists locally, no need for work")
       return
-    log_debug('reset_cb: Using %s for local got file' % got_filename)
+    logging.debug('reset_cb: Using %s for local got file' % got_filename)
     remote_obj.load(real_filename, open(got_filename).read().rstrip())
   except Exception as e:
-    log_error('Failed to reset %s' % real_filename, e)
+    logging.error('Failed to reset %s' % real_filename, e)
 
 def add_cb(repo, got_filename, real_filename):
   try:
-    log_debug('add_cb: Adding %s' % real_filename)
+    logging.debug('add_cb: Adding %s' % real_filename)
     csum = file_hash(real_filename)
     remote_obj.store(real_filename, csum)
     with open(got_filename, 'w') as hash_file:
@@ -356,7 +353,7 @@ def add_cb(repo, got_filename, real_filename):
     git_add(repo, '.gitignore')
   except Exception as e:
     print sys.exc_traceback.tb_lineno
-    log_error('Failed to add %s' % real_filename, e)
+    logging.error('Failed to add %s' % real_filename, e)
 
 def status_local(got_filename, real_filename):
   """
@@ -370,16 +367,16 @@ def status_local(got_filename, real_filename):
   """
   try:
     if not os.path.exists(real_filename):
-      log_debug('status_local: Did not find file %s' % real_filename)
+      logging.debug('status_local: Did not find file %s' % real_filename)
       return False
     sum1 = file_hash(real_filename)
     sum2 = open(got_filename).read().rstrip()
     if sum1 != sum2:
-      log_debug('status_local: Got hash %s != file hash %s' % (sum1, sum2))
+      logging.debug('status_local: Got hash %s != file hash %s' % (sum1, sum2))
       return False
     return True
   except Exception as e:
-    log_error('status_local: Failed to status %s' % real_filename, e)
+    logging.error('status_local: Failed to status %s' % real_filename, e)
     return False
 
 def status_cb(repo, got_filename, real_filename):
@@ -393,41 +390,19 @@ def status_cb(repo, got_filename, real_filename):
     if not status_local(got_filename, real_filename):
       return 'Modified: %s' % real_filename
   except Exception as e:
-    log_error('Failed to status %s' % real_filename, e)
-
-def log(level, message, exception):
-  if None is exception:
-    print '%s : %s' % (level, message)
-  else:
-    print '%s:%s:%s' % (level, message, exception)
-
-def log_error(message, exception = None):
-  if 'ERROR' in LOG_LEVELS:
-    log('ERROR', message, exception)
-
-def log_warn(message, exception = None):
-  if 'WARN' in LOG_LEVELS:
-    log('WARN', message, exception)
-
-def log_info(message, exception = None):
-  if 'INFO' in LOG_LEVELS:
-    log('INFO', message, exception)
-
-def log_debug(message, exception = None):
-  if 'DEBUG' in LOG_LEVELS:
-    log('DEBUG', message, exception)
+    logging.error('Failed to status %s' % real_filename, e)
 
 def upgrade_cb(new):
   pass
 
 def walker(function, repo, origpath, args):
   output = []
-  log_debug("walker: args: " + str(args))
+  logging.debug("walker: args: " + str(args))
   for arg in args:
     fullpath = os.path.normpath(os.path.join(origpath, arg))
-    log_debug('walker: processing argument %s' % fullpath)
+    logging.debug('walker: processing argument %s' % fullpath)
     if os.path.isfile(fullpath):
-      log_debug('walker: processing file %s' % fullpath)
+      logging.debug('walker: processing file %s' % fullpath)
       (base, filename) = os.path.split(fullpath)
       output.append(function(repo, os.path.join(base, '.%s.got' % filename), fullpath))
     else:
@@ -439,7 +414,7 @@ def walker(function, repo, origpath, args):
         for filename in fnmatch.filter(filenames, '.*.got'):
           realpath = os.path.normpath(os.path.join(base, filename[1:-4]))
           gotpath = os.path.normpath(os.path.join(base, filename))
-          log_debug('walker: processing file %s' % realpath)
+          logging.debug('walker: processing file %s' % realpath)
           output.append(function(repo, gotpath, realpath))
   return output
 
@@ -512,6 +487,8 @@ def find_git_path_and_chdir():
   return os.path.relpath(origpath, os.path.commonprefix([origpath, os.getcwd()]))
 
 def main(argv):
+  loglevel = logging.ERROR
+  logformat = "%(message)s"
   try:
     opts, args = getopt.gnu_getopt(argv[1:], 'd:h', ['debug', 'help'])
   except getopt.GetoptError as err:
@@ -526,9 +503,25 @@ def main(argv):
       except ValueError:
         usage()
         return 1
+
+      if d_int == 0:
+        loglevel = logging.ERROR
+      elif d_int == 1:
+        loglevel = logging.WARNING
+      elif d_int == 2:
+        loglevel = logging.INFO
+      elif d_int == 3:
+        loglevel = logging.DEBUG
+      elif d_int >= 4:
+        loglevel = logging.DEBUG
+        logformat = logging.BASIC_FORMAT
     elif o in ("-h", "--help"):
       usage()
       return 0
+    else:
+      assert False, "unhandled option"
+
+  logging.basicConfig(level=loglevel, format=logformat)
 
   origpath = find_git_path_and_chdir()
 
