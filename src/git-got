@@ -420,7 +420,7 @@ def status_local(got_filename, real_filename):
       return False
     return True
   except Exception as e:
-    logging.error('status_local: Failed to status %s' % real_filename, e)
+    logging.error('status_local: Failed to get status of %s: %s' % (real_filename, str(e)))
     return False
 
 def status_cb(repo, got_filename, real_filename):
