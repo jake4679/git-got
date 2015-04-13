@@ -357,8 +357,6 @@ def reset_cb(repo, got_filename, real_filename):
   @param real_filename  Real filename
   """
   try:
-    # FIXME: here we need to check if the local file is already unmodified, and
-    # if so, do nothing
     logging.debug('reset_cb: Resetting %s' % real_filename)
     if status_local(got_filename, real_filename):
       logging.debug("File already exists locally, no need for work")
