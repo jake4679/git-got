@@ -16,7 +16,7 @@ import paramiko
 import urlparse
 import getpass
 
-DEFAULT_LOG_LEVELS=['INFO', 'WARN', 'ERROR', 'DEBUG']
+DEFAULT_LOG_LEVELS=['INFO', 'WARN', 'ERROR']
 
 LOG_LEVELS = DEFAULT_LOG_LEVELS
 
