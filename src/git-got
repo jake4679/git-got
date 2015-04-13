@@ -524,9 +524,6 @@ def main(argv):
     with open('.got/storage', 'w') as storagefile:
       json.dump(configuration, storagefile)
     git_add(repo, '.got/storage')
-    ignorefile = open('.gitignore', 'w')
-    ignorefile.close()
-    git_add(repo, '.gitignore')
   elif not check_initialized():
     print 'Got not initialized\n'
     usage()
