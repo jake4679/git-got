@@ -315,6 +315,8 @@ def usage():
   print("                      just the status of the named files.")
   print("  reset <file>...     Overwrite one or more local got files with the remote")
   print("                      copy.  Note that directories are not allowed.")
+  print("  remove <file>...    Remove the specified file or files from got tracking.")
+  print("                      Note that this does not remove the file from the remote.")
 
 def git_add(repo, filename):
   """
@@ -443,6 +445,39 @@ def status_cb(repo, got_filename, real_filename):
 
 def upgrade_cb(new):
   pass
+
+def remove_cb(repo, got_filename, real_filename):
+  """
+  Removes a file from got tracking.  Note that it does not remove the remote
+  file, just the local tracking.
+
+  @param repo           Dulwich repository object
+  @param got_filename   Got meta filename
+  @param real_filename  Real filename
+  """
+  try:
+    # attempt to remove the real file, but if it is already gone, just go on
+    logging.debug("Removing real file")
+    try:
+      os.remove(real_filename)
+    except OSError:
+      pass
+    # now remove the got tracking file
+    logging.debug("Removing tracking file")
+    os.remove(got_filename)
+    # now remove the entry from .gitignore
+    logging.debug("Removing file from gitignore")
+    input = open('.gitignore', 'rb')
+    output = open('.tmp.gitignore', 'wb')
+    for line in input.xreadlines():
+      if line != got_filename + "\n":
+        output.write(line)
+    output.close()
+    input.close()
+    os.rename(".tmp.gitignore", ".gitignore")
+    git_add(repo, ".gitignore")
+  except Exception as e:
+    logging.error('Failed to remove %s: %s' % (real_filename, str(e)))
 
 def walker(function, repo, origpath, args):
   """
@@ -710,6 +745,20 @@ def main(argv):
     for change in changes:
       if None != change:
         print('# %s' % change)
+    return 0
+  elif command == 'rm':
+    if len(args) < 2:
+      usage()
+      return 1
+
+    # we only allow removing files (not subdirectories); check that here
+    for arg in args[1:]:
+      if not os.path.isfile(os.path.join(origpath, arg)):
+        print("git-got only allows files, not subdirectories, to be removed")
+        usage()
+        return 1
+
+    walker(remove_cb, repo, origpath, args[1:])
     return 0
   else:
     usage()
