@@ -696,13 +696,13 @@ def remove_cb(repo, got_filename, real_filename, user_params):
     os.remove(got_filename)
     # now remove the entry from .gitignore
     logging.debug("Removing file from gitignore")
-    input = open('.gitignore', 'rb')
-    output = open('.tmp.gitignore', 'wb')
-    for line in input.xreadlines():
-      if line != got_filename + "\n":
-        output.write(line)
-    output.close()
-    input.close()
+    infile = open('.gitignore', 'rb')
+    outfile = open('.tmp.gitignore', 'wb')
+    for line in infile.xreadlines():
+      if line != real_filename + "\n":
+        outfile.write(line)
+    outfile.close()
+    infile.close()
     os.rename(".tmp.gitignore", ".gitignore")
     git_add(repo, ".gitignore")
   except Exception as e:
