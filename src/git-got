@@ -388,6 +388,11 @@ def usage():
   print("  list_remotes                     List all of the remotes that are configured")
   print("                                   for got.  The remote printed with a star is")
   print("                                   the default.")
+  print("")
+  print("  chmod <file> <mode>              Change the permission bits for the specified")
+  print("                                   file.  Note that these bits are automatically")
+  print("                                   restored when the file is re-downloaded from")
+  print("                                   the remote.")
 
 def git_add(repo, filename):
   """
@@ -435,6 +440,7 @@ def get_cb(repo, got_filename, real_filename, user_params):
     for remote_obj in remote_objs:
       if remote_obj.remote_name() == gotconf['remote']:
         remote_obj.load(real_filename, gotconf['sha-256'])
+        os.chmod(real_filename, gotconf['mode'])
         return
     raise Exception, "Could not find remote %s for file %s" % (gotconf['remote'], real_filename)
   except Exception as e:
@@ -481,7 +487,7 @@ def add_cb(repo, got_filename, real_filename, user_params):
     logging.debug('add_cb: Adding %s' % real_filename)
     csum = file_hash(real_filename)
     remote_obj.store(real_filename, csum)
-    gotconf = { 'sha-256': csum, 'remote': remote_obj.remote_name() }
+    gotconf = { 'sha-256': csum, 'remote': remote_obj.remote_name(), 'mode': os.stat(real_filename).st_mode }
     with open(got_filename, 'w') as out:
       json.dump(gotconf, out)
     git_add(repo, got_filename)
@@ -580,8 +586,24 @@ def remove_remote_check_cb(repo, got_filename, real_filename, user_params):
   remote_name = user_params[0]
   links = user_params[1]
 
+  # FIXME: can we use the append output of the walker instead?
   if gotconf['remote'] == remote_name:
     links.append(real_filename)
+
+def chmod_cb(repo, got_filename, real_filename, user_params):
+  with open(got_filename, 'r') as storagefp:
+    gotconf = json.load(storagefp)
+
+  mode = user_params
+
+  # first change the mode in the configuration
+  gotconf['mode'] = mode
+  with open(got_filename, 'w') as out:
+    json.dump(gotconf, out)
+
+  # if the file exists, change the mode
+  if os.path.exists(real_filename):
+    os.chmod(real_filename, int(mode))
 
 def walker(function, repo, origpath, user_params, args):
   """
@@ -590,12 +612,12 @@ def walker(function, repo, origpath, user_params, args):
 
   cb(repo, got_filename, real_filename, user_params)
 
-  @param remote    The remote to use
-  @param function  The function to call on each got managed file
-  @param repo      Dulwich repository object to pass into the callback
-  @param origpath  The original current working directory when got was invoked,
-                   used to figure out the appropriate paths
-  @param args      The list of files/directories to walk
+  @param function     The function to call on each got managed file
+  @param repo         Dulwich repository object to pass into the callback
+  @param origpath     The original current working directory when got was
+                      invoked, used to figure out the appropriate paths
+  @param user_params  Callback specific parameters to pass to the callback
+  @param args         The list of files/directories to walk
 
   @return A string built from the output of all invocations of the callback
           function.
@@ -978,6 +1000,14 @@ def main(argv):
       else:
         print("  "),
       print("%s\t%s\t%s" % (remote_obj.remote_name(), remote_obj.remote_type(), remote_obj.remote_url()))
+  elif command == "chmod":
+    if len(args) != 3:
+      usage()
+      return 1
+
+    filename = args[1]
+    mode = args[2]
+    walker(chmod_cb, repo, origpath, mode, [filename])
   else:
     usage()
     return 1
