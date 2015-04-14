@@ -157,6 +157,18 @@ class SCP(object):
   def version(self):
     return self.configuration['version']
 
+  def remote_name(self):
+    return self.configuration['name']
+
+  def remote_default(self):
+    return self.configuration['default']
+
+  def remote_type(self):
+    return self.configuration['remote_type']
+
+  def remote_url(self):
+    return self.configuration['remote']
+
 class SRR(object):
   def __init__(self, configuration):
     self.last_mb = -1
@@ -252,6 +264,18 @@ class SRR(object):
   def version(self):
     return self.configuration['version']
 
+  def remote_name(self):
+    return self.configuration['name']
+
+  def remote_default(self):
+    return self.configuration['default']
+
+  def remote_type(self):
+    return self.configuration['remote_type']
+
+  def remote_url(self):
+    return self.configuration['remote']
+
 class File(object):
   def __init__(self, configuration):
     self.configuration = configuration
@@ -305,24 +329,65 @@ class File(object):
   def version(self):
     return self.configuration['version']
 
+  def remote_name(self):
+    return self.configuration['name']
+
+  def remote_default(self):
+    return self.configuration['default']
+
+  def remote_type(self):
+    return self.configuration['remote_type']
+
+  def remote_url(self):
+    return self.configuration['remote']
+
 def usage():
   print("git got <command> [<args>]")
   print("")
   print("The available git got commands are:")
-  print("  init <type> <url>   Initialize the remote to be used with the repository,")
-  print("                      where <type> is one of 'scp', 'srr', or 'file'.")
-  print("  get [<file>...]     With no arguments, retrieve all remote files to the local")
-  print("                      working area.  With one or more arguments, retrieve just")
-  print("                      those remote files to the local working area.")
-  print("  add <file>...       Add one or more files to the remote repository.  Note")
-  print("                      that directories are not allowed.")
-  print("  status [<file>...]  With no arguments, request the status of all got")
-  print("                      tracked files.  With one or more arguments, request")
-  print("                      just the status of the named files.")
-  print("  reset <file>...     Overwrite one or more local got files with the remote")
-  print("                      copy.  Note that directories are not allowed.")
-  print("  remove <file>...    Remove the specified file or files from got tracking.")
-  print("                      Note that this does not remove the file from the remote.")
+  print("  init <name> <type> <url>         Initialize the default remote to be used with")
+  print("                                   the repository, where <type> is one of 'scp'")
+  print("                                   'srr', or 'file'.  The <name> is a unique")
+  print("                                   name used to refer to the repository later.")
+  print("                                   The <url> is the fully qualified URL to the")
+  print("                                   remote.")
+  print("")
+  print("  get [<file>...]                  With no arguments, retrieve all remote files")
+  print("                                   to the local working area.  With one or more")
+  print("                                   arguments, retrieve just those remote files")
+  print("                                   to the local working area.")
+  print("")
+  print("  add [-b <remote] <file>...       Add one or more files to the remote")
+  print("                                   repository.  Note that directories are not")
+  print("                                   allowed.  The optional -b argument allows the")
+  print("                                   user to specify which remote to use; if not")
+  print("                                   specified, the default remote is used.")
+  print("")
+  print("  status [<file>...]               With no arguments, request the status of all")
+  print("                                   got tracked files.  With one or more")
+  print("                                   arguments, request the status of the named")
+  print("                                   files.")
+  print("")
+  print("  reset <file>...                  Overwrite one or more local got files with")
+  print("                                   the remote copy.  Note that directories are")
+  print("                                   not allowed.")
+  print("")
+  print("  rm <file>...                     Remove the specified file or files from got")
+  print("                                   tracking.  Note that this does not remove the")
+  print("                                   file from the remote.  Also note that")
+  print("                                   directories are not allowed.")
+  print("")
+  print("  add_remote <type> <name> <url>   Add an additional remote for storage.  The")
+  print("                                   arguments are the same as for init.")
+  print("")
+  print("  remove_remote <name>             Remove a remote from the repository.  This")
+  print("                                   will only succeed if the remote is not the")
+  print("                                   default and if there are no files in the")
+  print("                                   repository linked to that remote.")
+  print("")
+  print("  list_remotes                     List all of the remotes that are configured")
+  print("                                   for got.  The remote printed with a star is")
+  print("                                   the default.")
 
 def git_add(repo, filename):
   """
@@ -351,26 +416,32 @@ def file_hash(filename):
       hasher.update(data)
   return hasher.hexdigest()
 
-def get_cb(repo, got_filename, real_filename):
+def get_cb(repo, got_filename, real_filename, user_params):
   """
   Fetches the specified file from the remote if necessary.
 
   @param repo           Dulwich repository object
   @param got_filename   Got meta filename
   @param real_filename  Real filename
+  @param user_params    Ignored
   """
   try:
     logging.debug('get_cb: Using %s for local file' % real_filename)
-    if status_local(got_filename, real_filename):
+    gotconf = status_local(got_filename, real_filename)
+    if gotconf is None:
       logging.debug("File already exists, and has right checksum; skipping download...")
       return
     logging.debug("Downloading remote file...")
-    remote_obj.load(real_filename, open(got_filename).read().rstrip())
+    for remote_obj in remote_objs:
+      if remote_obj.remote_name() == gotconf['remote']:
+        remote_obj.load(real_filename, gotconf['sha-256'])
+        return
+    raise Exception, "Could not find remote %s for file %s" % (gotconf['remote'], real_filename)
   except Exception as e:
     logging.error('Failed to retrieve file %s: %s' % (real_filename, str(e)))
     raise
 
-def reset_cb(repo, got_filename, real_filename):
+def reset_cb(repo, got_filename, real_filename, user_params):
   """
   Resets the specified file to the version from the got database, re-downloading
   it from the remote if necessary.
@@ -378,23 +449,41 @@ def reset_cb(repo, got_filename, real_filename):
   @param repo           Dulwich repository object
   @param got_filename   Got meta filename
   @param real_filename  Real filename
+  @param user_params    Ignored
   """
-  get_cb(repo, got_filename, real_filename)
+  get_cb(repo, got_filename, real_filename, user_params)
 
-def add_cb(repo, got_filename, real_filename):
+def add_cb(repo, got_filename, real_filename, user_params):
   """
   Adds a new file to the got database and uploads it to the remote.
 
   @param repo           Dulwich repository object
   @param got_filename   Got meta filename
   @param real_filename  Real filename
+  @param user_params    A string representing the remote to use
   """
+  remote = user_params
   try:
+    remote_obj = None
+    for tmp in remote_objs:
+      if remote is None:
+        if tmp.remote_default():
+          remote_obj = tmp
+          break
+      else:
+        if tmp.remote_name() == remote:
+          remote_obj = tmp
+          break
+
+    if remote_obj is None:
+      raise Exception, "Remote named '%s' does not exist" % (remote)
+
     logging.debug('add_cb: Adding %s' % real_filename)
     csum = file_hash(real_filename)
     remote_obj.store(real_filename, csum)
-    with open(got_filename, 'w') as hash_file:
-      hash_file.write('%s' % csum)
+    gotconf = { 'sha-256': csum, 'remote': remote_obj.remote_name() }
+    with open(got_filename, 'w') as out:
+      json.dump(gotconf, out)
     git_add(repo, got_filename)
     with open('.gitignore', 'a') as gitignorefile:
       gitignorefile.write('%s\n' % real_filename)
@@ -410,23 +499,25 @@ def status_local(got_filename, real_filename):
 
   @param got_filename   Got meta filename
   @param real_filename  Real filename
-  @return True if The file is unchanged, False if the file is changed or not found
+  @return None if the file is unchanged, JSON got configuration if the file is changed or not found
   """
+  with open(got_filename, 'r') as storagefp:
+    gotconf = json.load(storagefp)
+
   try:
     if not os.path.exists(real_filename):
       logging.debug('status_local: Did not find file %s' % real_filename)
-      return False
+      return gotconf
     sum1 = file_hash(real_filename)
-    sum2 = open(got_filename).read().rstrip()
-    if sum1 != sum2:
+    if sum1 != gotconf['sha-256']:
       logging.debug('status_local: Got hash %s != file hash %s' % (sum1, sum2))
-      return False
-    return True
+      return gotconf
+    return None
   except Exception as e:
     logging.error('status_local: Failed to get status of %s: %s' % (real_filename, str(e)))
-    return False
+    return gotconf
 
-def status_cb(repo, got_filename, real_filename):
+def status_cb(repo, got_filename, real_filename, user_params):
   """
   Retrieves the status of the filename specified.  Invoked from the main
   walker loop.
@@ -434,11 +525,12 @@ def status_cb(repo, got_filename, real_filename):
   @param repo           Dulwich repository object
   @param got_filename   Got meta filename
   @param real_filename  Real filename
+  @param user_params    Ignored
   """
   try:
     if not os.path.exists(real_filename):
       return 'Missing locally: %s' % real_filename
-    if not status_local(got_filename, real_filename):
+    if status_local(got_filename, real_filename) is not None:
       return 'Modified: %s' % real_filename
   except Exception as e:
     logging.error('Failed to get status of %s: %s' % (real_filename, str(e)))
@@ -447,7 +539,7 @@ def status_cb(repo, got_filename, real_filename):
 def upgrade_cb(new):
   pass
 
-def remove_cb(repo, got_filename, real_filename):
+def remove_cb(repo, got_filename, real_filename, user_params):
   """
   Removes a file from got tracking.  Note that it does not remove the remote
   file, just the local tracking.
@@ -455,6 +547,7 @@ def remove_cb(repo, got_filename, real_filename):
   @param repo           Dulwich repository object
   @param got_filename   Got meta filename
   @param real_filename  Real filename
+  @param user_params    Ignored
   """
   try:
     # attempt to remove the real file, but if it is already gone, just go on
@@ -480,13 +573,24 @@ def remove_cb(repo, got_filename, real_filename):
   except Exception as e:
     logging.error('Failed to remove %s: %s' % (real_filename, str(e)))
 
-def walker(function, repo, origpath, args):
+def remove_remote_check_cb(repo, got_filename, real_filename, user_params):
+  with open(got_filename, 'r') as storagefp:
+    gotconf = json.load(storagefp)
+
+  remote_name = user_params[0]
+  links = user_params[1]
+
+  if gotconf['remote'] == remote_name:
+    links.append(real_filename)
+
+def walker(function, repo, origpath, user_params, args):
   """
   A function to walk down a list of files/directories, calling a callback on
   each one.  The callback is expected to have a signature of:
 
-  cb(repo, got_filename, real_filename)
+  cb(repo, got_filename, real_filename, user_params)
 
+  @param remote    The remote to use
   @param function  The function to call on each got managed file
   @param repo      Dulwich repository object to pass into the callback
   @param origpath  The original current working directory when got was invoked,
@@ -511,17 +615,17 @@ def walker(function, repo, origpath, args):
           realpath = os.path.normpath(os.path.join(base, filename[1:-4]))
           gotpath = os.path.normpath(os.path.join(base, filename))
           logging.debug('walker: processing file %s' % realpath)
-          output.append(function(repo, gotpath, realpath))
+          output.append(function(repo, gotpath, realpath, user_params))
     else:
       # this covers both the case where the argument is a file and the case
       # where the full path isn't a file at all (which can happen if the local
       # version of the file was deleted)
       logging.debug('walker: processing file %s' % fullpath)
       (base, filename) = os.path.split(fullpath)
-      output.append(function(repo, os.path.join(base, '.%s.got' % filename), fullpath))
+      output.append(function(repo, os.path.join(base, '.%s.got' % filename), fullpath, user_params))
   return output
 
-remote_obj = None
+remote_objs = []
 
 def check_initialized():
   """
@@ -530,21 +634,27 @@ def check_initialized():
 
   @return True if the got configuration file was found, False otherwise
   """
-  global remote_obj
-  if os.path.isfile('.got/storage'):
-    with open('.got/storage', 'r') as storagefp:
-      configuration = json.load(storagefp)
-    if configuration['remote_type'] == 'srr':
-      remote_obj = SRR(configuration)
-    elif configuration['remote_type'] == 'file':
-      remote_obj = File(configuration)
-    else:
-      remote_obj = SCP(configuration)
+  global remote_objs
+  if os.path.isfile('.got/default'):
+    for f in os.listdir(".got"):
+      fullpath = os.path.join(".got", f)
+      with open(fullpath, 'r') as storagefp:
+        configuration = json.load(storagefp)
+      if configuration['remote_type'] == 'srr':
+        remote_objs.append(SRR(configuration))
+      elif configuration['remote_type'] == 'file':
+        remote_objs.append(File(configuration))
+      else:
+        remote_objs.append(SCP(configuration))
     return True
   return False
 
 def check_version(version):
-  return VERSION == remote_obj.version()
+  global remote_objs
+  for remote_obj in remote_objs:
+    if remote_obj.version() != VERSION:
+      return False
+  return True
 
 VERSION = 1
 
@@ -597,11 +707,44 @@ def find_git_path_and_chdir():
   # relative to that found directory
   return os.path.relpath(origpath, os.path.commonprefix([origpath, os.getcwd()]))
 
+def add_remote(args, default, repo):
+  if len(args) != 4:
+    usage()
+    return 1
+
+  name = args[1]
+  remote_type = args[2]
+  if remote_type != 'srr' and remote_type != 'scp' and remote_type != 'file':
+    usage()
+    return 1
+
+  # here, make sure we don't blow away an already configured got repository
+  if default:
+    if os.path.isfile('.got/default'):
+      print('Got remote already initialized!')
+      return 1
+    filename = os.path.join('.got', 'default')
+  else:
+    if not os.path.isfile('.got/default'):
+      print('Got must be initialized before adding additional remotes')
+      return 1
+    filename = os.path.join('.got', name)
+
+  remote = args[3]
+  mkdir_p('.got')
+  configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION, 'name': name, 'default': default }
+  with open(filename, 'a') as storagefile:
+    json.dump(configuration, storagefile)
+  git_add(repo, filename)
+  return 0
+
 def main(argv):
   loglevel = logging.ERROR
   logformat = "%(message)s"
+  remote = None
   try:
-    opts, args = getopt.gnu_getopt(argv[1:], 'd:h', ['debug', 'help'])
+    opts, args = getopt.gnu_getopt(argv[1:], 'd:hr:', ['debug', 'help',
+                                                       'remote'])
   except getopt.GetoptError as err:
     print(str(err))
     usage()
@@ -629,6 +772,8 @@ def main(argv):
     elif o in ("-h", "--help"):
       usage()
       return 0
+    elif o in ("-r", "--remote"):
+      remote = a
     else:
       assert False, "unhandled option"
 
@@ -648,30 +793,14 @@ def main(argv):
 
   command = args[0]
 
+  if command != 'add' and remote != None:
+    # the remote argument only works for add
+    usage()
+    return 1
+
   # For bootstrapping purposes we have to check if the command is "init" first.
   if command == 'init':
-    if len(args) != 3:
-      usage()
-      return 1
-
-    remote_type = args[1]
-    if remote_type != 'srr' and remote_type != 'scp' and remote_type != 'file':
-      usage()
-      return 1
-
-    # here, make sure we don't blow away an already configuration got repository
-    if os.path.isfile('.got/storage'):
-      print('Got backend already initialized!')
-      return 1
-
-    remote = args[2]
-    mkdir_p('.got')
-    configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION }
-    with open('.got/storage', 'w') as storagefile:
-      json.dump(configuration, storagefile)
-    git_add(repo, '.got/storage')
-    return 0
-
+    return add_remote(args, True, repo)
   if not check_initialized():
     print('Got not initialized\n')
     usage()
@@ -705,7 +834,7 @@ def main(argv):
         return 1
 
     try:
-      walker(add_cb, repo, origpath, args[1:])
+      walker(add_cb, repo, origpath, remote, args[1:])
     except:
       # add_cb already printed the error, so we just modify the return value
       return 1
@@ -724,7 +853,7 @@ def main(argv):
         return 1
 
     try:
-      walker(reset_cb, repo, origpath, args[1:])
+      walker(reset_cb, repo, origpath, None, args[1:])
     except:
       # reset_cb already printed the error, so we just modify the return value
       return 1
@@ -740,7 +869,7 @@ def main(argv):
       return 1
 
     try:
-      walker(get_cb, repo, origpath, path)
+      walker(get_cb, repo, origpath, None, path)
     except:
       # get_cb already printed the error, so we just modify the return value
       return 1
@@ -756,7 +885,7 @@ def main(argv):
       return 1
 
     try:
-      changes = walker(status_cb, repo, origpath, path)
+      changes = walker(status_cb, repo, origpath, None, path)
     except:
       # status_cb already printed the error, so we just modify the return value
       return 1
@@ -771,6 +900,9 @@ def main(argv):
       usage()
       return 1
 
+    # FIXME: deal with removal of files that have been staged but not yet
+    # committed
+
     # we only allow removing files (not subdirectories); check that here
     for arg in args[1:]:
       if not os.path.isfile(os.path.join(origpath, arg)):
@@ -779,12 +911,73 @@ def main(argv):
         return 1
 
     try:
-      walker(remove_cb, repo, origpath, args[1:])
+      walker(remove_cb, repo, origpath, None, args[1:])
     except:
       # remove_cb already printed the error, so we just modify the return value
       return 1
 
     return 0
+  elif command == "add_remote":
+    return add_remote(args, False, repo)
+  elif command == "remove_remote":
+    if len(args) != 2:
+      usage()
+      return 1
+
+    name = args[1]
+    links = []
+
+    # FIXME: deal with removal of remotes that have been staged but not yet
+    # committed
+
+    remote_obj = None
+    for tmp in remote_objs:
+      if tmp.remote_name() == name:
+        if tmp.remote_default():
+          print("Cannot remove default remote")
+          return 1
+        else:
+          remote_obj = tmp
+          break
+
+    if remote_obj is None:
+      print("Could not find remote named %s" % name)
+      return 1
+
+    try:
+      walker(remove_remote_check_cb, repo, origpath, [name, links], ['.'])
+    except:
+      # remove_remote_check_cb already printed the error, so we just modify the
+      # return value
+      return 1
+
+    if len(links) != 0:
+      print("Cannot remove remote '%s'; the following files are linked to it:" % name)
+      print("  "),
+      for index,link in enumerate(links):
+        print("%s" % link),
+        if index != len(links) - 1:
+          print(","),
+      print("")
+      return 1
+
+    fullpath = os.path.join(".got", remote_obj.remote_name())
+    logging.debug("Removing %s" % (fullpath))
+    os.remove(fullpath)
+    return 0
+  elif command == "list_remotes":
+    if len(args) != 1:
+      usage()
+      return 1
+
+    print("   Name:\tType:\tURL:")
+    print("-" * 80)
+    for remote_obj in remote_objs:
+      if remote_obj.remote_default():
+        print(" *"),
+      else:
+        print("  "),
+      print("%s\t%s\t%s" % (remote_obj.remote_name(), remote_obj.remote_type(), remote_obj.remote_url()))
   else:
     usage()
     return 1
