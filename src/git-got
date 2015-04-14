@@ -144,6 +144,7 @@ class SRR(object):
     self.upload_len = -1
 
   def _get_location_info_srr(self):
+    logging.debug("srr._get_location_info_srr")
     parser = urlparse.urlparse(self.configuration['remote'])
     return (parser.hostname, os.path.basename(parser.path))
 
@@ -209,10 +210,14 @@ class SRR(object):
                             "Downloading")
 
   def load(self, filename, checksum):
-    logging.debug("load_srr")
+    checksum = checksum.encode('utf-8')
+    logging.debug("load_srr %s %s" % (filename, checksum))
     (server, parent_id) = self._get_location_info_srr()
+    server = server.encode('utf-8')
+    parent_id = parent_id.encode('utf-8')
 
     path = self._get_remote_path_srr(server, checksum)
+    path = path.encode('utf-8')
     logging.debug("load_srr, filename %s, path %s" % (filename, path))
 
     self.last_mb = -1
