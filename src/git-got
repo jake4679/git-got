@@ -685,7 +685,7 @@ def chmod_cb(repo, got_filename, real_filename, user_params):
     mode = user_params
 
     # first change the mode in the configuration
-    gotconf['mode'] = mode
+    gotconf['mode'] = int(mode)
     with open(got_filename, 'w') as out:
       json.dump(gotconf, out)
 
