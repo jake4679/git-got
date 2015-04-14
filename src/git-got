@@ -48,6 +48,10 @@ import getopt
 import logging
 
 def print_transfer_string(transferred, total, filename, direction):
+  """
+  A function to print out what percentage of a transfer has happened to which
+  file, and in which direction (up or down).
+  """
   if total > 1073741824:
     suffix = "GB"
     divider = 1073741824
