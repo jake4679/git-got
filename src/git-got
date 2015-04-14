@@ -47,48 +47,11 @@ import getpass
 import getopt
 import logging
 
-def print_transfer_string(transferred, total, filename, direction):
-  """
-  A function to print out what percentage of a transfer has happened to which
-  file, and in which direction (up or down).
+VERSION = 1
 
-  @param transferred  The number of bytes transferred so far
-  @param total        The total number of bytes in transfer
-  @param filename     The local filename being downloaded or uploaded
-  @param direction    A string representing the direction of the transfer
-  """
-  if total > 1073741824:
-    suffix = "GB"
-    divider = 1073741824
-  elif total > 1048576:
-    suffix = "MB"
-    divider = 1048576
-  elif total > 1024:
-    suffix = "KB"
-    divider = 1024
-  else:
-    suffix = "bytes"
-    divider = 1
+remote_objs = []
 
-  divided_tran = int(transferred / divider)
-  divided_total = int(total / divider)
-  percent = int(transferred * 100 / total)
-  strlen_no_file = len(direction) + 1 + 1 + len(str(divided_tran)) + 1 + len(str(divided_total)) + 1 + len(suffix) + 2 + 3 + 2
-
-  filenamelen = len(filename)
-  if strlen_no_file + len(filename) > 80:
-    filenamelen = 80 - strlen_no_file
-
-  sys.stdout.write("\r")
-  sys.stdout.write("{0} {1:.{2}s} {3}/{4} {5} ({6}%)".format(direction,
-                                                             filename,
-                                                             filenamelen,
-                                                             divided_tran,
-                                                             divided_total,
-                                                             suffix, percent))
-
-  sys.stdout.flush()
-
+############################ SCP BACKEND #####################################
 class SCP(object):
   def __init__(self, configuration):
     self.direction = "Downloading"
@@ -169,6 +132,7 @@ class SCP(object):
   def remote_url(self):
     return self.configuration['remote']
 
+############################ SRR BACKEND #####################################
 class SRR(object):
   def __init__(self, configuration):
     self.last_mb = -1
@@ -276,6 +240,7 @@ class SRR(object):
   def remote_url(self):
     return self.configuration['remote']
 
+############################ FILE BACKEND #####################################
 class File(object):
   def __init__(self, configuration):
     self.configuration = configuration
@@ -341,6 +306,63 @@ class File(object):
   def remote_url(self):
     return self.configuration['remote']
 
+##################### CUSTOM EXCEPTION CLASS #################################
+class GotException(Exception):
+  def __init__(self, msg, need_usage=False):
+    self.msg = msg
+    self.need_usage = need_usage
+  def __str__(self):
+    usagestr = ""
+    if self.need_usage:
+      if self.msg != "":
+        usagestr += "\n\n"
+      usagestr += usage()
+
+    return self.msg + usagestr
+
+############################# HELPERS #######################################
+def print_transfer_string(transferred, total, filename, direction):
+  """
+  A function to print out what percentage of a transfer has happened to which
+  file, and in which direction (up or down).
+
+  @param transferred  The number of bytes transferred so far
+  @param total        The total number of bytes in transfer
+  @param filename     The local filename being downloaded or uploaded
+  @param direction    A string representing the direction of the transfer
+  """
+  if total > 1073741824:
+    suffix = "GB"
+    divider = 1073741824
+  elif total > 1048576:
+    suffix = "MB"
+    divider = 1048576
+  elif total > 1024:
+    suffix = "KB"
+    divider = 1024
+  else:
+    suffix = "bytes"
+    divider = 1
+
+  divided_tran = int(transferred / divider)
+  divided_total = int(total / divider)
+  percent = int(transferred * 100 / total)
+  strlen_no_file = len(direction) + 1 + 1 + len(str(divided_tran)) + 1 + len(str(divided_total)) + 1 + len(suffix) + 2 + 3 + 2
+
+  filenamelen = len(filename)
+  if strlen_no_file + len(filename) > 80:
+    filenamelen = 80 - strlen_no_file
+
+  sys.stdout.write("\r")
+  sys.stdout.write("{0} {1:.{2}s} {3}/{4} {5} ({6}%)".format(direction,
+                                                             filename,
+                                                             filenamelen,
+                                                             divided_tran,
+                                                             divided_total,
+                                                             suffix, percent))
+
+  sys.stdout.flush()
+
 def usage():
   return """git got <command> [<args>]
 
@@ -394,19 +416,6 @@ The available git got commands are:
                                    the remote.
 """
 
-class GotException(Exception):
-  def __init__(self, msg, need_usage=False):
-    self.msg = msg
-    self.need_usage = need_usage
-  def __str__(self):
-    usagestr = ""
-    if self.need_usage:
-      if self.msg != "":
-        usagestr += "\n\n"
-      usagestr += usage()
-
-    return self.msg + usagestr
-
 def git_add(repo, filename):
   """
   Add a file to the git database.
@@ -434,6 +443,55 @@ def file_hash(filename):
       hasher.update(data)
   return hasher.hexdigest()
 
+def mkdir_p(path):
+  """
+  Function to make a directory and all intermediate directories as
+  necessary.  The functionality differs from os.makedirs slightly, in
+  that this function does *not* raise an error if the directory already
+  exists.
+
+  @param path  The directory path to create
+  """
+  if path is None:
+    raise Exception("Path cannot be None")
+
+  if path == '':
+    # this can happen if the user did something like call os.path.dirname()
+    # on a file without directories.  Since os.makedirs throws an exception
+    # in that case, check for it here and allow it.
+    return
+
+  try:
+    os.makedirs(path)
+  except OSError as err:
+    if err.errno != errno.EEXIST or not os.path.isdir(path):
+      raise
+
+def status_local(got_filename, real_filename):
+  """
+  Determines if there are local changes made to the file specified in the
+  filename parameter.
+
+  @param got_filename   Got meta filename
+  @param real_filename  Real filename
+  @return None if the file is unchanged, JSON got configuration if the file is changed or not found
+  """
+  try:
+    with open(got_filename, 'r') as storagefp:
+      gotconf = json.load(storagefp)
+
+    if not os.path.exists(real_filename):
+      logging.debug('status_local: Did not find file %s' % real_filename)
+      return gotconf
+    sum1 = file_hash(real_filename)
+    if sum1 != gotconf['sha-256']:
+      logging.debug('status_local: Got hash %s != file hash %s' % (sum1, sum2))
+      return gotconf
+    return None
+  except Exception as e:
+    raise GotException('status_local: Failed to get status of %s: %s' % (real_filename, str(e)))
+
+####################### WALKER AND CALLBACKS ##################################
 def get_cb(repo, got_filename, real_filename, user_params):
   """
   Fetches the specified file from the remote if necessary.
@@ -509,30 +567,6 @@ def add_cb(repo, got_filename, real_filename, user_params):
   except Exception as e:
     raise GotException('Failed to add %s: %s' % (real_filename, str(e)))
 
-def status_local(got_filename, real_filename):
-  """
-  Determines if there are local changes made to the file specified in the
-  filename parameter.
-
-  @param got_filename   Got meta filename
-  @param real_filename  Real filename
-  @return None if the file is unchanged, JSON got configuration if the file is changed or not found
-  """
-  try:
-    with open(got_filename, 'r') as storagefp:
-      gotconf = json.load(storagefp)
-
-    if not os.path.exists(real_filename):
-      logging.debug('status_local: Did not find file %s' % real_filename)
-      return gotconf
-    sum1 = file_hash(real_filename)
-    if sum1 != gotconf['sha-256']:
-      logging.debug('status_local: Got hash %s != file hash %s' % (sum1, sum2))
-      return gotconf
-    return None
-  except Exception as e:
-    raise GotException('status_local: Failed to get status of %s: %s' % (real_filename, str(e)))
-
 def status_cb(repo, got_filename, real_filename, user_params):
   """
   Retrieves the status of the filename specified.  Invoked from the main
@@ -550,129 +584,6 @@ def status_cb(repo, got_filename, real_filename, user_params):
       return 'Modified: %s' % real_filename
   except Exception as e:
     raise GotException('Failed to get status of %s: %s' % (real_filename, str(e)))
-
-def upgrade_command(args):
-  if len(args) != 1:
-    raise GotException("", need_usage=True)
-
-def add_command(args, repo, origpath, remote):
-  if len(args) < 2:
-    raise GotException("", need_usage=True)
-
-  # we only allow adding files (not subdirectories); check that here
-  for arg in args[1:]:
-    if not os.path.isfile(os.path.join(origpath, arg)):
-      raise GotException("Got only allows files, not subdirectories, to be added")
-
-  walker(add_cb, repo, origpath, remote, args[1:])
-
-def reset_command(args, repo, origpath):
-  if len(args) < 2:
-    raise GotException("", need_usage=True)
-
-  # we only allow resetting files (not subdirectories); check that here
-  for arg in args[1:]:
-    if not os.path.isfile(os.path.join(origpath, arg)):
-      raise GotException("Got only allows files, not subdirectories, to be reset")
-
-  walker(reset_cb, repo, origpath, None, args[1:])
-
-def get_command(args, repo, origpath):
-  if len(args) == 1:
-    path = ['.']
-  elif len(args) > 1:
-    path = args[1:]
-  else:
-    raise GotException("", need_usage=True)
-
-  walker(get_cb, repo, origpath, None, path)
-
-def status_command(args, repo, origpath):
-  if len(args) == 1:
-    path = ['.']
-  elif len(args) > 1:
-    path = args[1:]
-  else:
-    raise GotException("", need_usage=True)
-
-  changes = walker(status_cb, repo, origpath, None, path)
-
-  print('# Changes')
-  for change in changes:
-    if None != change:
-      print('# %s' % change)
-
-def rm_command(args, repo, origpath):
-  if len(args) < 2:
-    raise GotException("", need_usage=True)
-
-  # FIXME: deal with removal of files that have been staged but not yet
-  # committed
-
-  # we only allow removing files (not subdirectories); check that here
-  for arg in args[1:]:
-    if os.path.isdir(os.path.join(origpath, arg)):
-      raise GotException("Got only allows files, not subdirectories, to be removed")
-
-  walker(remove_cb, repo, origpath, None, args[1:])
-
-def remove_remote_command(args, repo, origpath):
-  if len(args) != 2:
-    raise GotException("", need_usage=True)
-
-  name = args[1]
-  links = []
-
-  # FIXME: deal with removal of remotes that have been staged but not yet
-  # committed
-
-  remote_obj = None
-  for tmp in remote_objs:
-    if tmp.remote_name() == name:
-      if tmp.remote_default():
-        raise GotException("Cannot remove default remote")
-      else:
-        remote_obj = tmp
-        break
-
-  if remote_obj is None:
-    raise GotException("Could not find remote named %s" % name)
-
-  walker(remove_remote_check_cb, repo, origpath, [name, links], ['.'])
-
-  if len(links) != 0:
-    exceptstr = "Cannot remove remote '%s'; the following files are linked to it:\n\n  " % name
-
-    for index,link in enumerate(links):
-      exceptstr += "%s" % link
-      if index != len(links) - 1:
-        exceptstr += ", "
-    raise GotException(exceptstr)
-
-  fullpath = os.path.join(".got", remote_obj.remote_name())
-  logging.debug("Removing %s" % (fullpath))
-  os.remove(fullpath)
-
-def list_remotes_command(args):
-  if len(args) != 1:
-    raise GotException("", need_usage=True)
-
-  print("   Name:\tType:\tURL:")
-  print("-" * 80)
-  for remote_obj in remote_objs:
-    if remote_obj.remote_default():
-      print(" *"),
-    else:
-      print("  "),
-    print("%s\t%s\t%s" % (remote_obj.remote_name(), remote_obj.remote_type(), remote_obj.remote_url()))
-
-def chmod_command(args, repo, origpath):
-  if len(args) != 3:
-    raise GotException("", need_usage=True)
-
-  filename = args[1]
-  mode = args[2]
-  walker(chmod_cb, repo, origpath, mode, [filename])
 
 def remove_cb(repo, got_filename, real_filename, user_params):
   """
@@ -802,126 +713,7 @@ def walker(function, repo, origpath, user_params, args):
       output.append(function(repo, os.path.join(base, '.%s.got' % filename), fullpath, user_params))
   return output
 
-remote_objs = []
-
-def check_initialized():
-  """
-  Function to look for got initialization, and open up the configuration if
-  found.
-
-  @return True if the got configuration file was found, False otherwise
-  """
-  global remote_objs
-  if os.path.isfile('.got/default'):
-    for f in os.listdir(".got"):
-      fullpath = os.path.join(".got", f)
-      with open(fullpath, 'r') as storagefp:
-        configuration = json.load(storagefp)
-      if configuration['remote_type'] == 'srr':
-        remote_objs.append(SRR(configuration))
-      elif configuration['remote_type'] == 'file':
-        remote_objs.append(File(configuration))
-      else:
-        remote_objs.append(SCP(configuration))
-    return True
-  return False
-
-def check_version(version):
-  global remote_objs
-  for remote_obj in remote_objs:
-    if remote_obj.version() != VERSION:
-      return False
-  return True
-
-VERSION = 1
-
-def mkdir_p(path):
-  """
-  Function to make a directory and all intermediate directories as
-  necessary.  The functionality differs from os.makedirs slightly, in
-  that this function does *not* raise an error if the directory already
-  exists.
-
-  @param path  The directory path to create
-  """
-  if path is None:
-    raise Exception("Path cannot be None")
-
-  if path == '':
-    # this can happen if the user did something like call os.path.dirname()
-    # on a file without directories.  Since os.makedirs throws an exception
-    # in that case, check for it here and allow it.
-    return
-
-  try:
-    os.makedirs(path)
-  except OSError as err:
-    if err.errno != errno.EEXIST or not os.path.isdir(path):
-      raise
-
-def find_git_path_and_chdir():
-  """
-  This function is expected to be called at the beginning and goes looking
-  for the closest .git subdirectory or file in the filesystem hierarchy.
-  We look for the .git subdirectory by first looking in ./.git, then changing
-  directory to .. and looking for .git, etc, until we either find a .git
-  directory or until we hit / (at which point we raise an error).  At the end
-  we have changed directory to the appropriate level, which is similar to how
-  git itself operates.  Assuming we succeed, this function returns a relative
-  path to the original path we started out in so that subsequent operations
-  (that may git add) can do the right thing.
-  """
-  try:
-    origpath = os.getcwd()
-    curpath = origpath
-    while not os.path.exists(os.path.join(curpath, '.git')) and curpath != '/':
-      os.chdir("..")
-      curpath = os.getcwd()
-
-    if curpath == '/':
-      raise Exception("Could not find git repository")
-
-    # OK, we found the .git directory/file.  Now return the original path
-    # relative to that found directory
-    return os.path.relpath(origpath, os.path.commonprefix([origpath, os.getcwd()]))
-  except Exception as e:
-    raise GotException("Failed to initialize git-got: %s" % (str(e)))
-
-def add_remote(args, default, repo):
-  """
-  A function to add a got remote to the repository.  This is called both during
-  init and during add_remote time.
-
-  @param args  The command-line arguments
-  @param default  Whether this repository is the default one
-  @param repo     Dulwich repository object
-  """
-  if len(args) != 4:
-    raise GotException("", need_usage=True)
-
-  name = args[1]
-  remote_type = args[2]
-  if remote_type != 'srr' and remote_type != 'scp' and remote_type != 'file':
-    raise GotException("", need_usage=True)
-
-  # here, make sure we don't blow away an already configured got repository
-  if default:
-    if os.path.isfile('.got/default'):
-      raise GotException("Got remote already initialized!")
-    filename = os.path.join('.got', 'default')
-  else:
-    if not os.path.isfile('.got/default'):
-      raise GotException("Got must be initialized before adding additional remotes")
-    filename = os.path.join('.got', name)
-
-  # FIXME: we need to do basic checking on the remote to make sure it is sane
-  remote = args[3]
-  mkdir_p('.got')
-  configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION, 'name': name, 'default': default }
-  with open(filename, 'a') as storagefile:
-    json.dump(configuration, storagefile)
-  git_add(repo, filename)
-
+############################## MAIN HELPERS ##################################
 def parse_opts(argv):
   loglevel = logging.ERROR
   logformat = "%(message)s"
@@ -960,6 +752,223 @@ def parse_opts(argv):
 
   return (args, loglevel, logformat, remote, help_requested)
 
+def find_git_path_and_chdir():
+  """
+  This function is expected to be called at the beginning and goes looking
+  for the closest .git subdirectory or file in the filesystem hierarchy.
+  We look for the .git subdirectory by first looking in ./.git, then changing
+  directory to .. and looking for .git, etc, until we either find a .git
+  directory or until we hit / (at which point we raise an error).  At the end
+  we have changed directory to the appropriate level, which is similar to how
+  git itself operates.  Assuming we succeed, this function returns a relative
+  path to the original path we started out in so that subsequent operations
+  (that may git add) can do the right thing.
+  """
+  try:
+    origpath = os.getcwd()
+    curpath = origpath
+    while not os.path.exists(os.path.join(curpath, '.git')) and curpath != '/':
+      os.chdir("..")
+      curpath = os.getcwd()
+
+    if curpath == '/':
+      raise Exception("Could not find git repository")
+
+    # OK, we found the .git directory/file.  Now return the original path
+    # relative to that found directory
+    return os.path.relpath(origpath, os.path.commonprefix([origpath, os.getcwd()]))
+  except Exception as e:
+    raise GotException("Failed to initialize git-got: %s" % (str(e)))
+
+def check_initialized():
+  """
+  Function to look for got initialization, and open up the configuration if
+  found.
+
+  @return True if the got configuration file was found, False otherwise
+  """
+  global remote_objs
+  if os.path.isfile('.got/default'):
+    for f in os.listdir(".got"):
+      fullpath = os.path.join(".got", f)
+      with open(fullpath, 'r') as storagefp:
+        configuration = json.load(storagefp)
+      if configuration['remote_type'] == 'srr':
+        remote_objs.append(SRR(configuration))
+      elif configuration['remote_type'] == 'file':
+        remote_objs.append(File(configuration))
+      else:
+        remote_objs.append(SCP(configuration))
+    return True
+  return False
+
+def check_version(version):
+  global remote_objs
+  for remote_obj in remote_objs:
+    if remote_obj.version() != VERSION:
+      return False
+  return True
+
+############################# COMMAND IMPLEMENTATIONS ##########################
+def add_remote(args, default, repo):
+  """
+  A function to add a got remote to the repository.  This is called both during
+  init and during add_remote time.
+
+  @param args  The command-line arguments
+  @param default  Whether this repository is the default one
+  @param repo     Dulwich repository object
+  """
+  if len(args) != 4:
+    raise GotException("", need_usage=True)
+
+  name = args[1]
+  remote_type = args[2]
+  if remote_type != 'srr' and remote_type != 'scp' and remote_type != 'file':
+    raise GotException("", need_usage=True)
+
+  # here, make sure we don't blow away an already configured got repository
+  if default:
+    if os.path.isfile('.got/default'):
+      raise GotException("Got remote already initialized!")
+    filename = os.path.join('.got', 'default')
+  else:
+    if not os.path.isfile('.got/default'):
+      raise GotException("Got must be initialized before adding additional remotes")
+    filename = os.path.join('.got', name)
+
+  # FIXME: we need to do basic checking on the remote to make sure it is sane
+  remote = args[3]
+  mkdir_p('.got')
+  configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION, 'name': name, 'default': default }
+  with open(filename, 'a') as storagefile:
+    json.dump(configuration, storagefile)
+  git_add(repo, filename)
+
+def upgrade_command(args):
+  if len(args) != 1:
+    raise GotException("", need_usage=True)
+
+def add_command(args, repo, origpath, remote):
+  if len(args) < 2:
+    raise GotException("", need_usage=True)
+
+  # we only allow adding files (not subdirectories); check that here
+  for arg in args[1:]:
+    if not os.path.isfile(os.path.join(origpath, arg)):
+      raise GotException("Got only allows files, not subdirectories, to be added")
+
+  walker(add_cb, repo, origpath, remote, args[1:])
+
+def reset_command(args, repo, origpath):
+  if len(args) < 2:
+    raise GotException("", need_usage=True)
+
+  # we only allow resetting files (not subdirectories); check that here
+  for arg in args[1:]:
+    if not os.path.isfile(os.path.join(origpath, arg)):
+      raise GotException("Got only allows files, not subdirectories, to be reset")
+
+  walker(reset_cb, repo, origpath, None, args[1:])
+
+def get_command(args, repo, origpath):
+  if len(args) == 1:
+    path = ['.']
+  elif len(args) > 1:
+    path = args[1:]
+  else:
+    raise GotException("", need_usage=True)
+
+  walker(get_cb, repo, origpath, None, path)
+
+def status_command(args, repo, origpath):
+  if len(args) == 1:
+    path = ['.']
+  elif len(args) > 1:
+    path = args[1:]
+  else:
+    raise GotException("", need_usage=True)
+
+  changes = walker(status_cb, repo, origpath, None, path)
+
+  print('# Changes')
+  for change in changes:
+    if None != change:
+      print('# %s' % change)
+
+def rm_command(args, repo, origpath):
+  if len(args) < 2:
+    raise GotException("", need_usage=True)
+
+  # FIXME: deal with removal of files that have been staged but not yet
+  # committed
+
+  # we only allow removing files (not subdirectories); check that here
+  for arg in args[1:]:
+    if os.path.isdir(os.path.join(origpath, arg)):
+      raise GotException("Got only allows files, not subdirectories, to be removed")
+
+  walker(remove_cb, repo, origpath, None, args[1:])
+
+def remove_remote_command(args, repo, origpath):
+  if len(args) != 2:
+    raise GotException("", need_usage=True)
+
+  name = args[1]
+  links = []
+
+  # FIXME: deal with removal of remotes that have been staged but not yet
+  # committed
+
+  remote_obj = None
+  for tmp in remote_objs:
+    if tmp.remote_name() == name:
+      if tmp.remote_default():
+        raise GotException("Cannot remove default remote")
+      else:
+        remote_obj = tmp
+        break
+
+  if remote_obj is None:
+    raise GotException("Could not find remote named %s" % name)
+
+  walker(remove_remote_check_cb, repo, origpath, [name, links], ['.'])
+
+  if len(links) != 0:
+    exceptstr = "Cannot remove remote '%s'; the following files are linked to it:\n\n  " % name
+
+    for index,link in enumerate(links):
+      exceptstr += "%s" % link
+      if index != len(links) - 1:
+        exceptstr += ", "
+    raise GotException(exceptstr)
+
+  fullpath = os.path.join(".got", remote_obj.remote_name())
+  logging.debug("Removing %s" % (fullpath))
+  os.remove(fullpath)
+
+def list_remotes_command(args):
+  if len(args) != 1:
+    raise GotException("", need_usage=True)
+
+  print("   Name:\tType:\tURL:")
+  print("-" * 80)
+  for remote_obj in remote_objs:
+    if remote_obj.remote_default():
+      print(" *"),
+    else:
+      print("  "),
+    print("%s\t%s\t%s" % (remote_obj.remote_name(), remote_obj.remote_type(), remote_obj.remote_url()))
+
+def chmod_command(args, repo, origpath):
+  if len(args) != 3:
+    raise GotException("", need_usage=True)
+
+  filename = args[1]
+  mode = args[2]
+  walker(chmod_cb, repo, origpath, mode, [filename])
+
+############################### MAIN ##########################################
 def main(argv):
   try:
     (args, loglevel, logformat, remote, help_requested) = parse_opts(argv)
