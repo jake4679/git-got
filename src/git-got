@@ -914,6 +914,7 @@ def add_remote(args, default, repo):
       raise GotException("Got must be initialized before adding additional remotes")
     filename = os.path.join('.got', name)
 
+  # FIXME: we need to do basic checking on the remote to make sure it is sane
   remote = args[3]
   mkdir_p('.got')
   configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION, 'name': name, 'default': default }
