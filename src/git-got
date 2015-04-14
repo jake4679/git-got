@@ -585,7 +585,7 @@ def status_cb(repo, got_filename, real_filename, user_params):
   except Exception as e:
     raise GotException('Failed to get status of %s: %s' % (real_filename, str(e)))
 
-def remove_cb(repo, got_filename, real_filename, user_params):
+def rm_cb(repo, got_filename, real_filename, user_params):
   """
   Removes a file from got tracking.  Note that it does not remove the remote
   file, just the local tracking.
@@ -908,7 +908,7 @@ def rm_command(args, repo, origpath):
     if os.path.isdir(os.path.join(origpath, arg)):
       raise GotException("Got only allows files, not subdirectories, to be removed")
 
-  walker(remove_cb, repo, origpath, None, args[1:])
+  walker(rm_cb, repo, origpath, None, args[1:])
 
 def remove_remote_command(args, repo, origpath):
   if len(args) != 2:
