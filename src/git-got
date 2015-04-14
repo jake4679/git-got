@@ -641,13 +641,12 @@ def remove_remote_command(args, repo, origpath):
   walker(remove_remote_check_cb, repo, origpath, [name, links], ['.'])
 
   if len(links) != 0:
-    exceptstr = "Cannot remove remote '%s'; the following files are linked to it:\n" % name
+    exceptstr = "Cannot remove remote '%s'; the following files are linked to it:\n\n  " % name
 
     for index,link in enumerate(links):
       exceptstr += "%s" % link
       if index != len(links) - 1:
-        exceptstr += ","
-      exceptstr += "\n"
+        exceptstr += ", "
     raise GotException(exceptstr)
 
   fullpath = os.path.join(".got", remote_obj.remote_name())
