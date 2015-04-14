@@ -689,7 +689,7 @@ def chmod_cb(repo, got_filename, real_filename, user_params):
     with open(got_filename, 'w') as out:
       json.dump(gotconf, out)
 
-    # FIXME: should we stage the change here?
+    git_add(repo, got_filename)
 
     # if the file exists, change the mode
     if os.path.exists(real_filename):
