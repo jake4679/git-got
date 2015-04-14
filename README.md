@@ -33,7 +33,7 @@ This will report which files in the repository have been modified.
 
     git got status
 
-### To remove a file from the repo(Not implemented)
+### To remove a file from the repo
 This will remove the current hash file from the repository as well as delete the
 stored data in the current git repository.
 
