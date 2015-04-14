@@ -967,6 +967,9 @@ def main(argv):
       print(usage())
       return 0
 
+    if len(args) < 1:
+      raise GotException("", need_usage=True)
+
     logging.basicConfig(level=loglevel, format=logformat)
 
     origpath = find_git_path_and_chdir()
