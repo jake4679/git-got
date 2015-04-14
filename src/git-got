@@ -132,6 +132,9 @@ class SCP(object):
   def remote_url(self):
     return self.configuration['remote']
 
+  def scheme(self):
+    return 'ssh'
+
 ############################ SRR BACKEND #####################################
 class SRR(object):
   def __init__(self, configuration):
@@ -240,6 +243,9 @@ class SRR(object):
   def remote_url(self):
     return self.configuration['remote']
 
+  def scheme(self):
+    return 'http'
+
 ############################ FILE BACKEND #####################################
 class File(object):
   def __init__(self, configuration):
@@ -305,6 +311,26 @@ class File(object):
 
   def remote_url(self):
     return self.configuration['remote']
+
+  def scheme(self):
+    return 'file'
+
+def RemoteObjFactory(remote_type, remote, configuration):
+  if remote_type == 'srr':
+    obj = SRR(configuration)
+  elif remote_type == 'scp':
+    obj = SCP(configuration)
+  elif remote_type == 'file':
+    obj = File(configuration)
+  else:
+    raise GotException("", need_usage=True)
+
+  parser = urlparse.urlparse(remote)
+  objscheme = obj.scheme()
+  if parser.scheme != obj.scheme():
+    raise GotException("Remote of type '%s' must have URL scheme of '%s'" % (remote_type, objscheme))
+
+  return obj
 
 ##################### CUSTOM EXCEPTION CLASS #################################
 class GotException(Exception):
@@ -790,15 +816,11 @@ def check_initialized():
   global remote_objs
   if os.path.isfile('.got/default'):
     for f in os.listdir(".got"):
-      fullpath = os.path.join(".got", f)
-      with open(fullpath, 'r') as storagefp:
+      with open(os.path.join('.got', f), 'r') as storagefp:
         configuration = json.load(storagefp)
-      if configuration['remote_type'] == 'srr':
-        remote_objs.append(SRR(configuration))
-      elif configuration['remote_type'] == 'file':
-        remote_objs.append(File(configuration))
-      else:
-        remote_objs.append(SCP(configuration))
+      remote_objs.append(RemoteObjFactory(configuration['remote_type'],
+                                          configuration['remote'],
+                                          configuration))
     return True
   return False
 
@@ -824,8 +846,6 @@ def add_remote(args, default, repo):
 
   name = args[1]
   remote_type = args[2]
-  if remote_type != 'srr' and remote_type != 'scp' and remote_type != 'file':
-    raise GotException("", need_usage=True)
 
   # here, make sure we don't blow away an already configured got repository
   if default:
@@ -837,8 +857,10 @@ def add_remote(args, default, repo):
       raise GotException("Got must be initialized before adding additional remotes")
     filename = os.path.join('.got', name)
 
-  # FIXME: we need to do basic checking on the remote to make sure it is sane
   remote = args[3]
+
+  RemoteObjFactory(remote_type, remote, None)
+
   mkdir_p('.got')
   configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION, 'name': name, 'default': default }
   with open(filename, 'a') as storagefile:
