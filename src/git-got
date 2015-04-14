@@ -370,16 +370,7 @@ def reset_cb(repo, got_filename, real_filename):
   @param got_filename   Got meta filename
   @param real_filename  Real filename
   """
-  try:
-    logging.debug('reset_cb: Resetting %s' % real_filename)
-    if status_local(got_filename, real_filename):
-      logging.debug("File already exists locally, no need for work")
-      return
-    logging.debug('reset_cb: Using %s for local got file' % got_filename)
-    remote_obj.load(real_filename, open(got_filename).read().rstrip())
-  except Exception as e:
-    logging.error('Failed to reset %s: %s' % (real_filename, str(e)))
-    raise
+  get_cb(repo, got_filename, real_filename)
 
 def add_cb(repo, got_filename, real_filename):
   """
