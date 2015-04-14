@@ -413,6 +413,9 @@ def status_local(got_filename, real_filename):
   @return True if The file is unchanged, False if the file is changed or not found
   """
   try:
+    if not os.path.exists(real_filename):
+      logging.debug('status_local: Did not find file %s' % real_filename)
+      return False
     sum1 = file_hash(real_filename)
     sum2 = open(got_filename).read().rstrip()
     if sum1 != sum2:
