@@ -51,6 +51,11 @@ def print_transfer_string(transferred, total, filename, direction):
   """
   A function to print out what percentage of a transfer has happened to which
   file, and in which direction (up or down).
+
+  @param transferred  The number of bytes transferred so far
+  @param total        The total number of bytes in transfer
+  @param filename     The local filename being downloaded or uploaded
+  @param direction    A string representing the direction of the transfer
   """
   if total > 1073741824:
     suffix = "GB"
