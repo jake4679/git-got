@@ -611,7 +611,7 @@ def rm_command(args, repo, origpath):
 
   # we only allow removing files (not subdirectories); check that here
   for arg in args[1:]:
-    if not os.path.isfile(os.path.join(origpath, arg)):
+    if os.path.isdir(os.path.join(origpath, arg)):
       raise GotException("Got only allows files, not subdirectories, to be removed")
 
   walker(remove_cb, repo, origpath, None, args[1:])
