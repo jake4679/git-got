@@ -467,7 +467,6 @@ def remove_cb(repo, got_filename, real_filename):
     git_add(repo, ".gitignore")
   except Exception as e:
     logging.error('Failed to remove %s: %s' % (real_filename, str(e)))
-    remove
 
 def walker(function, repo, origpath, args):
   """
