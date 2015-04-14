@@ -262,6 +262,10 @@ class File(object):
     if direction == "Downloading":
       print_fname = dstpath
 
+    # FIXME: we may want to add a check to ensure that dirname(srcpath) exists
+    # before starting the transfer.  Otherwise the error message that happens
+    # isn't entirely clear which part is missing.
+
     src = open(srcpath, "rb")
     dst = open(dstpath, "wb")
 
