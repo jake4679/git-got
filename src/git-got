@@ -758,6 +758,14 @@ def walker(function, repo, origpath, user_params, args):
 
 ############################## MAIN HELPERS ##################################
 def parse_opts(argv):
+  """
+  A function to parse the command-line arguments and return the values in
+  a tuple.  This function always returns the same tuple; the default value
+  is return for those arguments that were not specified on the command-line.
+
+  @param argv  The arguments passed on the command-line
+  @return A tuple of all option values.
+  """
   loglevel = logging.ERROR
   logformat = "%(message)s"
   remote = None
@@ -806,6 +814,8 @@ def find_git_path_and_chdir():
   git itself operates.  Assuming we succeed, this function returns a relative
   path to the original path we started out in so that subsequent operations
   (that may git add) can do the right thing.
+
+  @return The original path that the got command was started in relative to the .git subdirectory.
   """
   try:
     origpath = os.getcwd()
@@ -841,7 +851,13 @@ def check_initialized():
     return True
   return False
 
-def check_version(version):
+def check_version():
+  """
+  Function to check to make sure the version of the remote storage files is
+  correct.
+
+  @return True if all of the remote storage files are at the current version, False otherwise.
+  """
   global remote_objs
   for remote_obj in remote_objs:
     if remote_obj.version() != VERSION:
@@ -885,10 +901,24 @@ def add_remote(args, default, repo):
   git_add(repo, filename)
 
 def upgrade_command(args):
+  """
+  Run the upgrade command.  This is not yet implemented.
+
+  @param args  The non-option arguments to this command
+  """
   if len(args) != 1:
     raise GotException("", need_usage=True)
 
 def add_command(args, repo, origpath, remote):
+  """
+  Run the add command to add a file to git-got tracking.  Addition of
+  subdirectories is not allowed.
+
+  @param args      The non-option arguments to this command
+  @param repo      Dulwich repository object
+  @param origpath  The original path that git-got was started in
+  @param remote    The remote to add this file to (maybe None, which means use the default)
+  """
   if len(args) < 2:
     raise GotException("", need_usage=True)
 
@@ -900,6 +930,14 @@ def add_command(args, repo, origpath, remote):
   walker(add_cb, repo, origpath, remote, args[1:])
 
 def reset_command(args, repo, origpath):
+  """
+  Run the reset command, to reset git-got tracked file(s) to their original
+  state.  Reset of subdirectories is not allowed.
+
+  @param args      The non-option arguments to this command
+  @param repo      Dulwich repository object
+  @param origpath  The original path that git-got was started in
+  """
   if len(args) < 2:
     raise GotException("", need_usage=True)
 
@@ -911,6 +949,16 @@ def reset_command(args, repo, origpath):
   walker(reset_cb, repo, origpath, None, args[1:])
 
 def get_command(args, repo, origpath):
+  """
+  Run the get command to fetch git-got tracked file(s) to the local directory.
+  If parameters are given, only the given files are fetched.  If no parameters
+  are given, all git-got tracked files are fetched.  In both cases, only the
+  files that need to be fetched are actually fetched.
+
+  @param args      The non-option arguments to this command
+  @param repo      Dulwich repository object
+  @param origpath  The original path that git-got was started in
+  """
   if len(args) == 1:
     path = ['.']
   elif len(args) > 1:
@@ -921,6 +969,13 @@ def get_command(args, repo, origpath):
   walker(get_cb, repo, origpath, None, path)
 
 def status_command(args, repo, origpath):
+  """
+  Run the status command to get the status of git-got tracked files.
+
+  @param args      The non-option arguments to this command
+  @param repo      Dulwich repository object
+  @param origpath  The original path that git-got was started in
+  """
   if len(args) == 1:
     path = ['.']
   elif len(args) > 1:
@@ -936,6 +991,14 @@ def status_command(args, repo, origpath):
       print('# %s' % change)
 
 def rm_command(args, repo, origpath):
+  """
+  Run the rm command to remove a file from git-got tracking.  Removal of
+  subdirectories is not allowed.
+
+  @param args      The non-option arguments to this command
+  @param repo      Dulwich repository object
+  @param origpath  The original path that git-got was started in
+  """
   if len(args) < 2:
     raise GotException("", need_usage=True)
 
@@ -950,6 +1013,15 @@ def rm_command(args, repo, origpath):
   walker(rm_cb, repo, origpath, None, args[1:])
 
 def remove_remote_command(args, repo, origpath):
+  """
+  Run the remove_remote command to remove a remote as a possible got backend.
+  If there are any files in the project still linked to the remote, the removal
+  of the remote will fail.
+
+  @param args      The non-option arguments to this command
+  @param repo      Dulwich repository object
+  @param origpath  The original path that git-got was started in
+  """
   if len(args) != 2:
     raise GotException("", need_usage=True)
 
@@ -987,6 +1059,11 @@ def remove_remote_command(args, repo, origpath):
   os.remove(fullpath)
 
 def list_remotes_command(args):
+  """
+  Run the list_remotes command to list all remote backends.
+
+  @param args      The non-option arguments to this command
+  """
   if len(args) != 1:
     raise GotException("", need_usage=True)
 
@@ -1035,7 +1112,7 @@ def main(argv):
       if not check_initialized():
         raise GotException('Got not initialized', need_usage=True)
     else:
-      version = check_version(VERSION)
+      version = check_version()
       if command != 'upgrade':
         if not version:
           raise GotException("Version of got repository requires upgrading, run upgrade command", need_usage=True)
