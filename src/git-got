@@ -894,7 +894,7 @@ def add_command(args, repo, origpath, remote):
 
   # we only allow adding files (not subdirectories); check that here
   for arg in args[1:]:
-    if not os.path.isfile(os.path.join(origpath, arg)):
+    if os.path.isdir(os.path.join(origpath, arg)):
       raise GotException("Got only allows files, not subdirectories, to be added")
 
   walker(add_cb, repo, origpath, remote, args[1:])
@@ -905,7 +905,7 @@ def reset_command(args, repo, origpath):
 
   # we only allow resetting files (not subdirectories); check that here
   for arg in args[1:]:
-    if not os.path.isfile(os.path.join(origpath, arg)):
+    if os.path.isdir(os.path.join(origpath, arg)):
       raise GotException("Got only allows files, not subdirectories, to be reset")
 
   walker(reset_cb, repo, origpath, None, args[1:])
