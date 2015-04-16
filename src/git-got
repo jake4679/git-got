@@ -696,10 +696,13 @@ def chmod_cb(repo, got_filename, real_filename, user_params):
     with open(got_filename, 'r') as storagefp:
       gotconf = json.load(storagefp)
 
-    mode = user_params
+    newmode = int(user_params, 0)
+
+    if newmode == gotconf['mode']:
+      return
 
     # first change the mode in the configuration
-    gotconf['mode'] = int(mode)
+    gotconf['mode'] = newmode
     with open(got_filename, 'w') as out:
       json.dump(gotconf, out)
 
@@ -707,7 +710,7 @@ def chmod_cb(repo, got_filename, real_filename, user_params):
 
     # if the file exists, change the mode
     if os.path.exists(real_filename):
-      os.chmod(real_filename, int(mode))
+      os.chmod(real_filename, newmode)
   except Exception as e:
     raise GotException('Failed to change mode on %s: %s' % (real_filename, str(e)))
 
