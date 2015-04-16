@@ -525,7 +525,7 @@ def status_local(got_filename, real_filename):
       return gotconf
     sum1 = file_hash(real_filename)
     if sum1 != gotconf['sha-256']:
-      logging.debug('status_local: Got hash %s != file hash %s' % (sum1, sum2))
+      logging.debug('status_local: Got hash %s != file hash %s' % (sum1, gotconf['sha-256']))
       return gotconf
     return None
   except Exception as e:
