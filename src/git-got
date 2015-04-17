@@ -543,7 +543,7 @@ def get_cb(repo, got_filename, real_filename, user_params):
     if not os.path.exists(got_filename):
       # this isn't a file tracked by got; this can happen if the user asked to
       # get or reset a file that got is not tracking
-      raise Exception, "%s is not tracked by got" % (real_filename)
+      raise Exception("%s is not tracked by got" % (real_filename))
     gotconf = status_local(got_filename, real_filename)
     if gotconf is None:
       logging.debug("File already exists, and has right checksum; skipping download...")
@@ -554,7 +554,7 @@ def get_cb(repo, got_filename, real_filename, user_params):
         remote_obj.load(real_filename, gotconf['sha-256'])
         os.chmod(real_filename, gotconf['mode'])
         return
-    raise Exception, "Could not find remote %s for file %s" % (gotconf['remote'], real_filename)
+    raise Exception("Could not find remote %s for file %s" % (gotconf['remote'], real_filename))
   except Exception as e:
     raise GotException('Failed to retrieve file %s: %s' % (real_filename, str(e)))
 
@@ -593,7 +593,7 @@ def add_cb(repo, got_filename, real_filename, user_params):
           break
 
     if remote_obj is None:
-      raise Exception, "Remote named '%s' does not exist" % (remote)
+      raise Exception("Remote named '%s' does not exist" % (remote))
 
     logging.debug('add_cb: Adding %s' % real_filename)
     csum = file_hash(real_filename)
