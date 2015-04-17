@@ -121,7 +121,7 @@ class SCP(object):
     return self.configuration['version']
 
   def remote_name(self):
-    return self.configuration['name']
+    return str(self.configuration['name'])
 
   def remote_default(self):
     return self.configuration['default']
@@ -237,7 +237,7 @@ class SRR(object):
     return self.configuration['version']
 
   def remote_name(self):
-    return self.configuration['name']
+    return str(self.configuration['name'])
 
   def remote_default(self):
     return self.configuration['default']
@@ -310,7 +310,7 @@ class File(object):
     return self.configuration['version']
 
   def remote_name(self):
-    return self.configuration['name']
+    return str(self.configuration['name'])
 
   def remote_default(self):
     return self.configuration['default']
