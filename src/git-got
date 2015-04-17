@@ -603,9 +603,26 @@ def add_cb(repo, got_filename, real_filename, user_params):
     with open(got_filename, 'w') as out:
       json.dump(gotconf, out)
     git_add(repo, got_filename)
-    with open('.gitignore', 'a') as gitignorefile:
-      gitignorefile.write('%s\n' % real_filename)
-    git_add(repo, '.gitignore')
+
+    # The user may be adding a new file, or updating a filename that already
+    # exists.  If it is the former, we want to add the filenames to gitignore;
+    # for the latter, we don't want to add duplicate entries.  Check that here
+    # and do the right thing in both cases.
+    already_in_gitignore = False
+    if os.path.exists('.gitignore'):
+      gitigf = open('.gitignore', 'rb')
+      for line in gitigf.xreadlines():
+        if line == real_filename + "\n":
+          already_in_gitignore = True
+          break
+
+      gitigf.close()
+
+    if not already_in_gitignore:
+      gitigf = open('.gitignore', 'ab')
+      gitigf.write('%s\n' % real_filename)
+      gitigf.close()
+      git_add(repo, '.gitignore')
   except Exception as e:
     raise GotException('Failed to add %s: %s' % (real_filename, str(e)))
 
