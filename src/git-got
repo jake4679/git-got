@@ -1044,9 +1044,6 @@ def remove_remote_command(args, repo, origpath):
   name = args[1]
   links = []
 
-  # FIXME: deal with removal of remotes that have been staged but not yet
-  # committed
-
   remote_obj = None
   for tmp in remote_objs:
     if tmp.remote_name() == name:
@@ -1070,9 +1067,18 @@ def remove_remote_command(args, repo, origpath):
         exceptstr += ", "
     raise GotException(exceptstr)
 
+  # OK, there are no links to this remote.  We can remove it
   fullpath = os.path.join(".got", remote_obj.remote_name())
-  logging.debug("Removing %s" % (fullpath))
-  os.remove(fullpath)
+  if fullpath in dulwich.porcelain.status(repo).staged['add']:
+    # In theory we should use dulwich.porcelain.rm() here, but for some
+    # reason it doesn't seem to work.  This is basically the same thing.
+    index = repo.open_index()
+    del index[fullpath]
+    index.write()
+    os.remove(fullpath)
+  else:
+    os.remove(fullpath)
+    git_add(repo, fullpath)
 
 def list_remotes_command(args):
   """
