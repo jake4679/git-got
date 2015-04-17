@@ -643,8 +643,16 @@ def rm_cb(repo, got_filename, real_filename, user_params):
     except OSError:
       pass
     # now remove the got tracking file
-    logging.debug("Removing tracking file")
-    os.remove(got_filename)
+    if got_filename in dulwich.porcelain.status(repo).staged['add']:
+      # In theory we should use dulwich.porcelain.rm() here, but for some
+      # reason it doesn't seem to work.  This is basically the same thing.
+      index = repo.open_index()
+      del index[got_filename]
+      index.write()
+      os.remove(got_filename)
+    else:
+      os.remove(got_filename)
+      git_add(repo, got_filename)
     # now remove the entry from .gitignore
     logging.debug("Removing file from gitignore")
     infile = open('.gitignore', 'rb')
@@ -1001,9 +1009,6 @@ def rm_command(args, repo, origpath):
   """
   if len(args) < 2:
     raise GotException("", need_usage=True)
-
-  # FIXME: deal with removal of files that have been staged but not yet
-  # committed
 
   # we only allow removing files (not subdirectories); check that here
   for arg in args[1:]:
