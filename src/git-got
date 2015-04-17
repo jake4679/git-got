@@ -544,6 +544,7 @@ def get_cb(repo, got_filename, real_filename, user_params):
       # this isn't a file tracked by got; this can happen if the user asked to
       # get or reset a file that got is not tracking
       raise Exception("%s is not tracked by got" % (real_filename))
+
     gotconf = status_local(got_filename, real_filename)
     if gotconf is None:
       logging.debug("File already exists, and has right checksum; skipping download...")
@@ -637,6 +638,9 @@ def rm_cb(repo, got_filename, real_filename, user_params):
   @param user_params    Ignored
   """
   try:
+    if not os.path.exists(got_filename):
+      raise Exception("%s is not tracked by got" % (real_filename))
+
     # attempt to remove the real file, but if it is already gone, just go on
     logging.debug("Removing real file")
     try:
