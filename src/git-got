@@ -510,26 +510,23 @@ def mkdir_p(path):
 def status_local(got_filename, real_filename):
   """
   Determines if there are local changes made to the file specified in the
-  filename parameter.
+  filename parameter.  Assumes that the got_filename exists.
 
   @param got_filename   Got meta filename
   @param real_filename  Real filename
   @return None if the file is unchanged, JSON got configuration if the file is changed or not found
   """
-  try:
-    with open(got_filename, 'r') as storagefp:
-      gotconf = json.load(storagefp)
+  with open(got_filename, 'r') as storagefp:
+    gotconf = json.load(storagefp)
 
-    if not os.path.exists(real_filename):
-      logging.debug('status_local: Did not find file %s' % real_filename)
-      return gotconf
-    sum1 = file_hash(real_filename)
-    if sum1 != gotconf['sha-256']:
-      logging.debug('status_local: Got hash %s != file hash %s' % (sum1, gotconf['sha-256']))
-      return gotconf
-    return None
-  except Exception as e:
-    raise GotException('status_local: Failed to get status of %s: %s' % (real_filename, str(e)))
+  if not os.path.exists(real_filename):
+    logging.debug('status_local: Did not find file %s' % real_filename)
+    return gotconf
+  sum1 = file_hash(real_filename)
+  if sum1 != gotconf['sha-256']:
+    logging.debug('status_local: Got hash %s != file hash %s' % (sum1, gotconf['sha-256']))
+    return gotconf
+  return None
 
 ####################### WALKER AND CALLBACKS ##################################
 def get_cb(repo, got_filename, real_filename, user_params):
@@ -543,6 +540,10 @@ def get_cb(repo, got_filename, real_filename, user_params):
   """
   try:
     logging.debug('get_cb: Using %s for local file' % real_filename)
+    if not os.path.exists(got_filename):
+      # this isn't a file tracked by got; this can happen if the user asked to
+      # get or reset a file that got is not tracking
+      raise Exception, "%s is not tracked by got" % (real_filename)
     gotconf = status_local(got_filename, real_filename)
     if gotconf is None:
       logging.debug("File already exists, and has right checksum; skipping download...")
