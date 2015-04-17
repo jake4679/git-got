@@ -903,6 +903,12 @@ def add_remote(args, default, repo):
       raise GotException("Got must be initialized before adding additional remotes")
     filename = os.path.join('.got', name)
 
+  # make sure the user doesn't try to add a remote with the same name as an
+  # existing remote
+  for remote_obj in remote_objs:
+    if remote_obj.remote_name() == name:
+      raise GotException("Failed to add remote: a remote with the name '%s' already exists" % (name))
+
   remote = args[3]
 
   RemoteObjFactory(remote_type, remote, None)
