@@ -51,12 +51,40 @@ VERSION = 1
 
 remote_objs = []
 
-############################ SCP BACKEND #####################################
-class SCP(object):
+class Remote(object):
   def __init__(self, configuration):
+    self.configuration = configuration
+
+  def version(self):
+    return self.configuration['version']
+
+  def remote_name(self):
+    return str(self.configuration['name'])
+
+  def remote_default(self):
+    return self.configuration['default']
+
+  def remote_type(self):
+    return self.configuration['remote_type']
+
+  def remote_url(self):
+    return self.configuration['remote']
+
+  def load(self, filename, checksum):
+    raise Exception("Load not implemented for this remote!")
+
+  def store(self, filename, checksum):
+    raise Exception("Store not implemented for this remote!")
+
+  def scheme(self):
+    raise Exception("Scheme not implemented for this remote!")
+
+############################ SCP BACKEND #####################################
+class SCP(Remote):
+  def __init__(self, configuration):
+    Remote.__init__(self, configuration)
     self.direction = "Downloading"
     self.filename = "Unset"
-    self.configuration = configuration
 
   def _print_total(self, transferred, total):
     print_transfer_string(transferred, total, self.filename, self.direction)
@@ -117,30 +145,15 @@ class SCP(object):
     sftp.close()
     ssh.close()
 
-  def version(self):
-    return self.configuration['version']
-
-  def remote_name(self):
-    return str(self.configuration['name'])
-
-  def remote_default(self):
-    return self.configuration['default']
-
-  def remote_type(self):
-    return self.configuration['remote_type']
-
-  def remote_url(self):
-    return self.configuration['remote']
-
   def scheme(self):
     return 'ssh'
 
 ############################ SRR BACKEND #####################################
-class SRR(object):
+class SRR(Remote):
   def __init__(self, configuration):
+    Remote.__init__(self, configuration)
     self.last_mb = -1
     self.filename = "Unset"
-    self.configuration = configuration
     self.upload_len = -1
 
   def _get_location_info_srr(self):
@@ -233,28 +246,13 @@ class SRR(object):
 
     sys.stdout.write("\n")
 
-  def version(self):
-    return self.configuration['version']
-
-  def remote_name(self):
-    return str(self.configuration['name'])
-
-  def remote_default(self):
-    return self.configuration['default']
-
-  def remote_type(self):
-    return self.configuration['remote_type']
-
-  def remote_url(self):
-    return self.configuration['remote']
-
   def scheme(self):
     return 'http'
 
 ############################ FILE BACKEND #####################################
-class File(object):
+class File(Remote):
   def __init__(self, configuration):
-    self.configuration = configuration
+    Remote.__init__(self, configuration)
     self.block_size = 8192
 
   def _transfer(self, srcpath, dstpath, direction):
@@ -305,21 +303,6 @@ class File(object):
 
     self._transfer(os.path.join(parser.path, checksum + ".got"), filename,
                    "Downloading")
-
-  def version(self):
-    return self.configuration['version']
-
-  def remote_name(self):
-    return str(self.configuration['name'])
-
-  def remote_default(self):
-    return self.configuration['default']
-
-  def remote_type(self):
-    return self.configuration['remote_type']
-
-  def remote_url(self):
-    return self.configuration['remote']
 
   def scheme(self):
     return 'file'
