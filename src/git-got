@@ -456,16 +456,6 @@ The available git got commands are:
                                    the remote.
 """
 
-def git_add(repo, filename):
-  """
-  Add a file to the git database.
-
-  @param repo      Dulwich repository object
-  @param filename  The file to add to the git database
-  """
-  logging.debug('git_add: Adding file %s to %s' % (filename, repo))
-  dulwich.porcelain.add(repo, filename)
-
 def file_hash(filename):
   """
   Hash the contents of the specified file using SHA-256 and return the hash
@@ -602,7 +592,7 @@ def add_cb(repo, got_filename, real_filename, user_params):
     gotconf = { 'sha-256': csum, 'remote': remote_obj.remote_name(), 'mode': os.stat(real_filename).st_mode }
     with open(got_filename, 'w') as out:
       json.dump(gotconf, out)
-    git_add(repo, got_filename)
+    dulwich.porcelain.add(repo, got_filename)
 
     # The user may be adding a new file, or updating a filename that already
     # exists.  If it is the former, we want to add the filenames to gitignore;
@@ -622,7 +612,7 @@ def add_cb(repo, got_filename, real_filename, user_params):
       gitigf = open('.gitignore', 'ab')
       gitigf.write('%s\n' % real_filename)
       gitigf.close()
-      git_add(repo, '.gitignore')
+      dulwich.porcelain.add(repo, '.gitignore')
   except Exception as e:
     raise GotException('Failed to add %s: %s' % (real_filename, str(e)))
 
@@ -674,7 +664,7 @@ def rm_cb(repo, got_filename, real_filename, user_params):
       os.remove(got_filename)
     else:
       os.remove(got_filename)
-      git_add(repo, got_filename)
+      dulwich.porcelain.add(repo, got_filename)
     # now remove the entry from .gitignore
     logging.debug("Removing file from gitignore")
     infile = open('.gitignore', 'rb')
@@ -685,7 +675,7 @@ def rm_cb(repo, got_filename, real_filename, user_params):
     outfile.close()
     infile.close()
     os.rename(".tmp.gitignore", ".gitignore")
-    git_add(repo, ".gitignore")
+    dulwich.porcelain.add(repo, ".gitignore")
   except Exception as e:
     raise GotException('Failed to remove %s: %s' % (real_filename, str(e)))
 
@@ -736,7 +726,7 @@ def chmod_cb(repo, got_filename, real_filename, user_params):
     with open(got_filename, 'w') as out:
       json.dump(gotconf, out)
 
-    git_add(repo, got_filename)
+    dulwich.porcelain.add(repo, got_filename)
 
     # if the file exists, change the mode
     if os.path.exists(real_filename):
@@ -934,7 +924,7 @@ def add_remote(args, default, repo):
   configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION, 'name': name, 'default': default }
   with open(filename, 'a') as storagefile:
     json.dump(configuration, storagefile)
-  git_add(repo, filename)
+  dulwich.porcelain.add(repo, filename)
 
 def upgrade_command(args):
   """
@@ -1095,7 +1085,7 @@ def remove_remote_command(args, repo, origpath):
     os.remove(fullpath)
   else:
     os.remove(fullpath)
-    git_add(repo, fullpath)
+    dulwich.porcelain.add(repo, fullpath)
 
 def list_remotes_command(args):
   """
