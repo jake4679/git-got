@@ -671,18 +671,18 @@ def remove_remote_check_cb(repo, got_filename, real_filename, user_params):
   @param repo           Dulwich repository object (ignored)
   @param got_filename   Got meta filename (ignored)
   @param real_filename  Real filename
-  @param user_params    A list where the first element is the name of the remote and the second element is a list of links
+  @param user_params    The name of the remote
   """
   try:
     with open(got_filename, 'r') as storagefp:
       gotconf = json.load(storagefp)
 
-    remote_name = user_params[0]
-    links = user_params[1]
+    remote_name = user_params
 
-    # FIXME: can we use the append output of the walker instead?
     if gotconf['remote'] == remote_name:
-      links.append(real_filename)
+      return real_filename
+    else:
+      return ''
   except Exception as e:
     raise GotException('Failed to check remote link %s: %s' % (real_filename, str(e)))
 
@@ -1046,12 +1046,17 @@ def remove_remote_command(args, repo, origpath):
   if remote_obj is None:
     raise GotException("Could not find remote named %s" % name)
 
-  walker(remove_remote_check_cb, repo, origpath, [name, links], ['.'])
+  links = walker(remove_remote_check_cb, repo, origpath, name, ['.'])
 
-  if len(links) != 0:
+  validlinks = []
+  for link in links:
+    if link != '':
+      validlinks.append(link)
+
+  if len(validlinks) != 0:
     exceptstr = "Cannot remove remote '%s'; the following files are linked to it:\n\n  " % name
 
-    for index,link in enumerate(links):
+    for index,link in enumerate(validlinks):
       exceptstr += "%s" % link
       if index != len(links) - 1:
         exceptstr += ", "
