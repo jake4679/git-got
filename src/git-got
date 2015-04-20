@@ -1129,11 +1129,10 @@ def main(argv):
     if command != 'init':
       if not check_initialized():
         raise GotException('Got not initialized', need_usage=True)
-    else:
-      version = check_version()
-      if command != 'upgrade':
-        if not version:
-          raise GotException("Version of got repository requires upgrading, run upgrade command", need_usage=True)
+
+    if command != 'init' and command != 'upgrade':
+      if not check_version():
+        raise GotException("Version of got repository requires upgrading, run upgrade command", need_usage=True)
 
     if command == 'init':
       add_remote(args, True, repo)
