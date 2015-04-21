@@ -23,7 +23,7 @@ tracked to the gitignore file.
 
     git got add path/bigfile
 
-### To retreive all files for an existing repository
+### To retrieve all files for an existing repository
 This will iterate over all .got files in the repository and pull down their
 contents.  Currently it does not verify if any local changes have been made.
 
