@@ -607,13 +607,18 @@ def status_cb(repo, got_filename, real_filename, user_params):
   @param repo           Dulwich repository object
   @param got_filename   Got meta filename
   @param real_filename  Real filename
-  @param user_params    Ignored
+  @param user_params    Verbose or not
   """
   try:
     if not os.path.exists(real_filename):
       return 'Missing locally: %s' % real_filename
     if status_local(got_filename, real_filename) is not None:
       return 'Modified: %s' % real_filename
+    # If we make it here, then the file exists locally and is the same as on
+    # the remote.  If we are verbose, add this file to the list.
+    verbose = user_params
+    if verbose:
+      return 'Unmodified: %s' % real_filename
   except Exception as e:
     raise GotException('Failed to get status of %s: %s' % (real_filename, str(e)))
 
@@ -773,9 +778,10 @@ def parse_opts(argv):
   logformat = "%(message)s"
   remote = None
   help_requested = False
+  verbose = False
   try:
-    opts, args = getopt.gnu_getopt(argv[1:], 'd:hr:', ['debug', 'help',
-                                                       'remote'])
+    opts, args = getopt.gnu_getopt(argv[1:], 'd:hr:v', ['debug', 'help',
+                                                       'remote', 'verbose'])
   except getopt.GetoptError as err:
     raise GotException(str(err), need_usage=True)
 
@@ -801,10 +807,12 @@ def parse_opts(argv):
       help_requested = True
     elif o in ("-r", "--remote"):
       remote = a
+    elif o in ("-v", "--verbose"):
+      verbose = True
     else:
       raise GotException("unhandled option '%s'" % o)
 
-  return (args, loglevel, logformat, remote, help_requested)
+  return (args, loglevel, logformat, remote, help_requested, verbose)
 
 def find_git_path_and_chdir():
   """
@@ -977,7 +985,7 @@ def get_command(args, repo, origpath):
 
   walker(get_cb, repo, origpath, None, path)
 
-def status_command(args, repo, origpath):
+def status_command(args, repo, origpath, verbose):
   """
   Run the status command to get the status of git-got tracked files.
 
@@ -992,7 +1000,7 @@ def status_command(args, repo, origpath):
   else:
     raise GotException("", need_usage=True)
 
-  changes = walker(status_cb, repo, origpath, None, path)
+  changes = walker(status_cb, repo, origpath, verbose, path)
 
   print('# Changes')
   for change in changes:
@@ -1105,7 +1113,7 @@ def chmod_command(args, repo, origpath):
 def main(argv):
   loglevel = logging.ERROR
   try:
-    (args, loglevel, logformat, remote, help_requested) = parse_opts(argv)
+    (args, loglevel, logformat, remote, help_requested, verbose) = parse_opts(argv)
 
     if help_requested:
       print(usage())
@@ -1124,6 +1132,10 @@ def main(argv):
 
     if command != 'add' and remote != None:
       # the remote argument only works for add
+      raise GotException("", need_usage=True)
+
+    if command != 'status' and verbose:
+      # the verbose argument only works for status
       raise GotException("", need_usage=True)
 
     if command != 'init':
@@ -1145,7 +1157,7 @@ def main(argv):
     elif command == 'get':
       get_command(args, repo, origpath)
     elif command == 'status':
-      status_command(args, repo, origpath)
+      status_command(args, repo, origpath, verbose)
     elif command == 'rm':
       rm_command(args, repo, origpath)
     elif command == "add_remote":
