@@ -1040,7 +1040,6 @@ def remove_remote_command(args, repo, origpath):
     raise GotException("", need_usage=True)
 
   name = args[1]
-  links = []
 
   remote_obj = None
   for tmp in remote_objs:
@@ -1056,19 +1055,15 @@ def remove_remote_command(args, repo, origpath):
 
   links = walker(remove_remote_check_cb, repo, origpath, name, ['.'])
 
-  validlinks = []
+  exceptstr = ''
   for link in links:
     if link != '':
-      validlinks.append(link)
+      exceptstr += "%s, " % link
 
-  if len(validlinks) != 0:
-    exceptstr = "Cannot remove remote '%s'; the following files are linked to it:\n\n  " % name
-
-    for index,link in enumerate(validlinks):
-      exceptstr += "%s" % link
-      if index != len(links) - 1:
-        exceptstr += ", "
-    raise GotException(exceptstr)
+  if len(exceptstr) != 0:
+    if exceptstr[-2:] == ', ':
+      exceptstr = exceptstr[:-2]
+    raise GotException("Cannot remove remote '%s'; the following files are linked to it:\n\n  " % name + exceptstr)
 
   # OK, there are no links to this remote.  We can remove it
   fullpath = os.path.join(".got", remote_obj.remote_name())
