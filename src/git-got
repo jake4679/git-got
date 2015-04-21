@@ -480,26 +480,23 @@ def mkdir_p(path):
     if err.errno != errno.EEXIST or not os.path.isdir(path):
       raise
 
-def status_local(got_filename, real_filename):
+def status_local(real_filename, got_checksum):
   """
   Determines if there are local changes made to the file specified in the
   filename parameter.  Assumes that the got_filename exists.
 
   @param got_filename   Got meta filename
   @param real_filename  Real filename
-  @return None if the file is unchanged, JSON got configuration if the file is changed or not found
+  @return True if the file exists locally and is unchanged, False otherwise
   """
-  with open(got_filename, 'r') as storagefp:
-    gotconf = json.load(storagefp)
-
   if not os.path.exists(real_filename):
     logging.debug('status_local: Did not find file %s' % real_filename)
-    return gotconf
+    return False
   sum1 = file_hash(real_filename)
-  if sum1 != gotconf['sha-256']:
-    logging.debug('status_local: Got hash %s != file hash %s' % (sum1, gotconf['sha-256']))
-    return gotconf
-  return None
+  if sum1 != got_checksum:
+    logging.debug('status_local: Got hash %s != file hash %s' % (sum1, got_checksum))
+    return False
+  return True
 
 ####################### WALKER AND CALLBACKS ##################################
 def get_cb(repo, got_filename, real_filename, user_params):
@@ -518,8 +515,10 @@ def get_cb(repo, got_filename, real_filename, user_params):
       # get or reset a file that got is not tracking
       raise Exception("%s is not tracked by got" % (real_filename))
 
-    gotconf = status_local(got_filename, real_filename)
-    if gotconf is None:
+    with open(got_filename, 'r') as storagefp:
+      gotconf = json.load(storagefp)
+
+    if status_local(real_filename, gotconf['sha-256']):
       logging.debug("File already exists, and has right checksum; skipping download...")
       return
     logging.debug("Downloading remote file...")
@@ -610,15 +609,19 @@ def status_cb(repo, got_filename, real_filename, user_params):
   @param user_params    Verbose or not
   """
   try:
+    with open(got_filename, 'r') as storagefp:
+      gotconf = json.load(storagefp)
+
     if not os.path.exists(real_filename):
-      return 'Missing locally: %s' % real_filename
-    if status_local(got_filename, real_filename) is not None:
-      return 'Modified: %s' % real_filename
+      return 'Missing locally: %s (remote %s)' % (real_filename, gotconf['remote'])
+
+    if not status_local(real_filename, gotconf['sha-256']):
+      return 'Modified: %s (remote %s)' % (real_filename, gotconf['remote'])
     # If we make it here, then the file exists locally and is the same as on
     # the remote.  If we are verbose, add this file to the list.
     verbose = user_params
     if verbose:
-      return 'Unmodified: %s' % real_filename
+      return 'Unmodified: %s (remote %s)' % (real_filename, gotconf['remote'])
   except Exception as e:
     raise GotException('Failed to get status of %s: %s' % (real_filename, str(e)))
 
