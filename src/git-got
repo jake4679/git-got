@@ -370,7 +370,7 @@ def print_transfer_string(transferred, total, filename, direction):
     percent = 100
   else:
     percent = int(transferred * 100 / total)
-  strlen_no_file = len(direction) + 1 + 1 + len(str(divided_tran)) + 1 + len(str(divided_total)) + 1 + len(suffix) + 2 + 3 + 2
+  strlen_no_file = len(direction) + 1 + 1 + len(str(divided_tran)) + 1 + len(str(divided_total)) + 1 + len(suffix) + 2 + 3 + 2 + 2
 
   filenamelen = len(filename)
   if strlen_no_file + len(filename) > 80:
