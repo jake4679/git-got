@@ -377,12 +377,12 @@ def print_transfer_string(transferred, total, filename, direction):
     filenamelen = 80 - strlen_no_file
 
   sys.stdout.write("\r")
-  sys.stdout.write("{0} {1:.{2}s} {3}/{4} {5} ({6}%)".format(direction,
-                                                             filename,
-                                                             filenamelen,
-                                                             divided_tran,
-                                                             divided_total,
-                                                             suffix, percent))
+  sys.stdout.write("{0} '{1:.{2}s}' {3}/{4} {5} ({6}%)".format(direction,
+                                                               filename,
+                                                               filenamelen,
+                                                               divided_tran,
+                                                               divided_total,
+                                                               suffix, percent))
 
   sys.stdout.flush()
 
@@ -513,7 +513,7 @@ def get_cb(repo, got_filename, real_filename, user_params):
     if not os.path.exists(got_filename):
       # this isn't a file tracked by got; this can happen if the user asked to
       # get or reset a file that got is not tracking
-      raise Exception("%s is not tracked by got" % (real_filename))
+      raise Exception("'%s' is not tracked by got" % (real_filename))
 
     with open(got_filename, 'r') as storagefp:
       gotconf = json.load(storagefp)
@@ -527,9 +527,9 @@ def get_cb(repo, got_filename, real_filename, user_params):
         remote_obj.load(real_filename, gotconf['sha-256'])
         os.chmod(real_filename, gotconf['mode'])
         return
-    raise Exception("Could not find remote %s for file %s" % (gotconf['remote'], real_filename))
+    raise Exception("Could not find remote '%s' for file '%s'" % (gotconf['remote'], real_filename))
   except Exception as e:
-    raise GotException('Failed to retrieve file %s: %s' % (real_filename, str(e)))
+    raise GotException("Failed to retrieve file '%s': %s" % (real_filename, str(e)))
 
 def reset_cb(repo, got_filename, real_filename, user_params):
   """
@@ -596,7 +596,7 @@ def add_cb(repo, got_filename, real_filename, user_params):
       gitigf.close()
       dulwich.porcelain.add(repo, '.gitignore')
   except Exception as e:
-    raise GotException('Failed to add %s: %s' % (real_filename, str(e)))
+    raise GotException("Failed to add '%s': %s" % (real_filename, str(e)))
 
 def status_cb(repo, got_filename, real_filename, user_params):
   """
@@ -613,17 +613,17 @@ def status_cb(repo, got_filename, real_filename, user_params):
       gotconf = json.load(storagefp)
 
     if not os.path.exists(real_filename):
-      return 'Missing locally: %s (remote %s)' % (real_filename, gotconf['remote'])
+      return "Missing locally: '%s' (remote '%s')" % (real_filename, gotconf['remote'])
 
     if not status_local(real_filename, gotconf['sha-256']):
-      return 'Modified: %s (remote %s)' % (real_filename, gotconf['remote'])
+      return "Modified: '%s' (remote '%s')" % (real_filename, gotconf['remote'])
     # If we make it here, then the file exists locally and is the same as on
     # the remote.  If we are verbose, add this file to the list.
     verbose = user_params
     if verbose:
-      return 'Unmodified: %s (remote %s)' % (real_filename, gotconf['remote'])
+      return "Unmodified: '%s' (remote '%s')" % (real_filename, gotconf['remote'])
   except Exception as e:
-    raise GotException('Failed to get status of %s: %s' % (real_filename, str(e)))
+    raise GotException("Failed to get status of '%s': %s" % (real_filename, str(e)))
 
 def rm_cb(repo, got_filename, real_filename, user_params):
   """
@@ -637,7 +637,7 @@ def rm_cb(repo, got_filename, real_filename, user_params):
   """
   try:
     if not os.path.exists(got_filename):
-      raise Exception("%s is not tracked by got" % (real_filename))
+      raise Exception("'%s' is not tracked by got" % (real_filename))
 
     # attempt to remove the real file, but if it is already gone, just go on
     logging.debug("Removing real file")
@@ -668,7 +668,7 @@ def rm_cb(repo, got_filename, real_filename, user_params):
     os.rename(".tmp.gitignore", ".gitignore")
     dulwich.porcelain.add(repo, ".gitignore")
   except Exception as e:
-    raise GotException('Failed to remove %s: %s' % (real_filename, str(e)))
+    raise GotException("Failed to remove '%s': %s" % (real_filename, str(e)))
 
 def remove_remote_check_cb(repo, got_filename, real_filename, user_params):
   """
@@ -692,7 +692,7 @@ def remove_remote_check_cb(repo, got_filename, real_filename, user_params):
     else:
       return ''
   except Exception as e:
-    raise GotException('Failed to check remote link %s: %s' % (real_filename, str(e)))
+    raise GotException("Failed to check remote link '%s': %s" % (real_filename, str(e)))
 
 def chmod_cb(repo, got_filename, real_filename, user_params):
   """
@@ -723,7 +723,7 @@ def chmod_cb(repo, got_filename, real_filename, user_params):
     if os.path.exists(real_filename):
       os.chmod(real_filename, newmode)
   except Exception as e:
-    raise GotException('Failed to change mode on %s: %s' % (real_filename, str(e)))
+    raise GotException("Failed to change mode on '%s': %s" % (real_filename, str(e)))
 
 def walker(function, repo, origpath, user_params, args):
   """
@@ -1054,7 +1054,7 @@ def remove_remote_command(args, repo, origpath):
         break
 
   if remote_obj is None:
-    raise GotException("Could not find remote named %s" % name)
+    raise GotException("Could not find remote named '%s'" % name)
 
   links = walker(remove_remote_check_cb, repo, origpath, name, ['.'])
 
