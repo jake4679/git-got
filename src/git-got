@@ -402,16 +402,18 @@ The available git got commands are:
                                    arguments, retrieve just those remote files
                                    to the local working area.
 
-  add [-b <remote] <file>...       Add one or more files to the remote
+  add [-r <remote] <file>...       Add one or more files to the remote
                                    repository.  Note that directories are not
-                                   allowed.  The optional -b argument allows the
+                                   allowed.  The optional -r argument allows the
                                    user to specify which remote to use; if not
                                    specified, the default remote is used.
 
-  status [<file>...]               With no arguments, request the status of all
+  status [-v] [<file>...]          With no arguments, request the status of all
                                    got tracked files.  With one or more
                                    arguments, request the status of the named
-                                   files.
+                                   files.  The optional -v argument asks for
+                                   verbose mode where all files are printed,
+                                   even the ones that haven't changed.
 
   reset <file>...                  Overwrite one or more local got files with
                                    the remote copy.  Note that directories are
