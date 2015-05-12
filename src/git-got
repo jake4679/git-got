@@ -46,6 +46,7 @@ import urlparse
 import getpass
 import getopt
 import logging
+import ftplib
 
 VERSION = 1
 
@@ -168,7 +169,6 @@ class SRR(Remote):
   def store(self, filename, checksum):
     logging.debug("store_srr")
     (server_name, parent_id) = self._get_location_info_srr()
-    local_path = filename
     target_id = ''
     remote_path = '%s' % checksum
     description = 'Got storage for %s @ TBD hashtag' % (filename)
@@ -307,6 +307,90 @@ class File(Remote):
   def scheme(self):
     return 'file'
 
+############################ FTP BACKEND #####################################
+class FTP(Remote):
+  def __init__(self, configuration):
+    Remote.__init__(self, configuration)
+    self.block_size = 8192
+    self.total_transferred = 0
+    self.total = 0
+    self.filename = None
+    self.remote_file = None
+    self.exists_on_remote = False
+    self.download_fp = None
+
+  def _transfer_cb(self, block):
+    self.total_transferred += len(block)
+    print_transfer_string(self.total_transferred, self.total, self.filename, "Uploading")
+
+  def _file_exists_cb(self, name):
+    if name == self.remote_file:
+      self.exists_on_remote = True
+
+  def store(self, filename, checksum):
+    logging.debug("store_ftp")
+    parser = urlparse.urlparse(self.configuration['remote'])
+
+    remotefile = '%s.got' % (checksum)
+
+    ftp = ftplib.FTP(parser.hostname)
+    ftp.login(parser.username, parser.password)
+    ftp.set_pasv(True)
+    # Change to the right directory.  Note that we strip off the starting slash
+    # since that isn't generally what is wanted.
+    ftp.cwd(parser.path[1:])
+
+    self.remote_file = remotefile
+    self.exists_on_remote = False
+    ftp.retrlines("NLST", self._file_exists_cb)
+    if self.exists_on_remote:
+      logging.debug("File existed on remote, skipping upload...")
+      return
+
+    fp = open(filename, 'rb')
+    self.total = os.fstat(fp.fileno()).st_size
+    self.total_transferred = 0
+    self.filename = filename
+    ftp.storbinary('STOR %s' % remotefile, fp, self.block_size, self._transfer_cb)
+    fp.close()
+
+    print_transfer_string(self.total, self.total, self.filename, "Uploading")
+    ftp.close()
+
+    sys.stdout.write("\n")
+
+  def _write_and_print_cb(self, block):
+    self.total_transferred += len(block)
+    self.download_fp.write(block)
+    print_transfer_string(self.total_transferred, self.total, self.filename, "Downloading")
+
+  def load(self, filename, checksum):
+    logging.debug("load_ftp")
+    parser = urlparse.urlparse(self.configuration['remote'])
+
+    ftp = ftplib.FTP(parser.hostname)
+    ftp.login(parser.username, parser.password)
+    ftp.set_pasv(True)
+    # Change to the right directory.  Note that we strip off the starting slash
+    # since that isn't generally what is wanted.
+    ftp.cwd(parser.path[1:])
+
+    remotefile = '%s.got' % (checksum)
+
+    self.total = ftp.size(remotefile)
+    self.filename = filename
+    self.total_transferred = 0
+    self.download_fp = open(filename, 'wb')
+    ftp.retrbinary("RETR %s" % remotefile, self._write_and_print_cb)
+
+    self.download_fp.close()
+    ftp.close()
+
+    sys.stdout.write("\n")
+
+  def scheme(self):
+    return 'ftp'
+
 def RemoteObjFactory(remote_type, remote, configuration):
   if remote_type == 'srr':
     obj = SRR(configuration)
@@ -314,6 +398,8 @@ def RemoteObjFactory(remote_type, remote, configuration):
     obj = SCP(configuration)
   elif remote_type == 'file':
     obj = File(configuration)
+  elif remote_type == 'ftp':
+    obj = FTP(configuration)
   else:
     raise GotException("", need_usage=True)
 
