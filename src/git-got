@@ -47,8 +47,9 @@ import getpass
 import getopt
 import logging
 import ftplib
+import boto.gs.connection
 
-VERSION = 1
+VERSION = 1.1
 
 remote_objs = []
 
@@ -79,6 +80,23 @@ class Remote(object):
 
   def scheme(self):
     raise Exception("Scheme not implemented for this remote!")
+
+  def file_hash(self, filename):
+    """
+    Hash the contents of the specified file using SHA-256 and return the hash
+    as a string.
+  
+    @param filename  The filename to hash the contents of
+    @return String representing the SHA-256 hash of the file contents
+    """
+    hasher = hashlib.sha256()
+    with open(filename, 'rb') as infp:
+      while True:
+        data = infp.read(8192)
+        if not data:
+          break
+        hasher.update(data)
+    return hasher.hexdigest()
 
 ############################ SCP BACKEND #####################################
 class SCP(Remote):
@@ -400,6 +418,8 @@ def RemoteObjFactory(remote_type, remote, configuration):
     obj = File(configuration)
   elif remote_type == 'ftp':
     obj = FTP(configuration)
+  elif remote_type == 'google':
+    obj = GoogleStorage(configuration)
   else:
     raise GotException("", need_usage=True)
 
@@ -409,6 +429,97 @@ def RemoteObjFactory(remote_type, remote, configuration):
     raise GotException("Remote of type '%s' must have URL scheme of '%s'" % (remote_type, objscheme))
 
   return obj
+
+############################ GOOGLE STORAGE BACKEND #####################################
+class GoogleStorage(Remote):
+  def __init__(self, configuration):
+    Remote.__init__(self, configuration)
+    self.filename = "Unset"
+
+  def _get_location_info(self):
+    logging.debug("googlestorage._get_location_info")
+    parser = urlparse.urlparse(self.configuration['remote'])
+    return (parser.hostname, os.path.basename(parser.path))
+
+  def store(self, filename, checksum):
+    logging.debug("store_googlestorage")
+    (url, bucket_name) = self._get_location_info()
+    target_id = ''
+    remote_path = '%s' % checksum
+    description = 'Got storage for %s @ TBD hashtag' % (filename)
+
+    # Connect to Google Storage using the bucket name specified in the configuration
+    try:
+      logging.debug('Connecting to google storage')
+      conn = boto.gs.connection.GSConnection(gs_access_key_id=os.environ['AWS_ACCESS_KEY_ID'], gs_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
+      if None != conn:
+        log.debug("Connected to Google Storage")
+
+      with boto.gs.connection.GSConnection(gs_access_key_id=client_id, gs_secret_access_key=private_key) as connection:
+        log.debug("Connected to Google Storage")
+        with connection.get_bucket(bucket_name) as bucket:
+          log.debug("Retrieiving bucket")
+          try:
+            key = bucket.get_key(remote_path)
+            if key.md5 == checksum:
+              logging.debug("File existed on remote, skipping upload...")
+              return
+          except Exception as e:
+            # Key did not exist so we need to upload it
+            logging.debug("Uploading file to remote...")
+            key = bucket.new_key(key_name=remote_path)
+            self.filename = filename
+            key.set_contents_from_filename(filename, cb=self._progress)
+    except AttributeError as e:
+      import traceback
+      traceback.print_exception
+      #raise GotException("Missing GoogleStorage access credentials", need_usage=True)
+
+  def _progress(transmitted, total):
+    current_mb = int(down_current) / 1048576
+    if current_mb > self.last_mb or down_current == down_total:
+      self.last_mb = current_mb
+      print_transfer_string(transmitted, total, self.filename, "Uploading")
+
+  def load(self, filename, checksum):
+    checksum = checksum.encode('utf-8')
+    logging.debug("load_srr %s %s" % (filename, checksum))
+    path = self._get_remote_path()
+    path = path.encode('utf-8')
+    logging.debug("load_srr, filename %s, path %s" % (filename, path))
+
+    self.last_mb = -1
+    self.filename = filename
+    with open(filename, 'wb') as f:
+      c = pycurl.Curl()
+      c.setopt(c.URL, path)
+      c.setopt(c.WRITEDATA, f)
+      c.setopt(c.NOPROGRESS, 0)
+      c.setopt(c.PROGRESSFUNCTION, self._curlprogress)
+      c.perform()
+      c.close()
+
+    sys.stdout.write("\n")
+
+  def scheme(self):
+    return 'https'
+
+  def file_hash(self, filename):
+    """
+    Hash the contents of the specified file using MD5 and return the hash
+    as a string.
+  
+    @param filename  The filename to hash the contents of
+    @return String representing the SHA-256 hash of the file contents
+    """
+    hasher = hashlib.md5()
+    with open(filename, 'rb') as infp:
+      while True:
+        data = infp.read(8192)
+        if not data:
+          break
+        hasher.update(data)
+    return hasher.hexdigest()
 
 ##################### CUSTOM EXCEPTION CLASS #################################
 class GotException(Exception):
@@ -478,7 +589,7 @@ def usage():
 The available git got commands are:
   init <name> <type> <url>         Initialize the default remote to be used with
                                    the repository, where <type> is one of 'scp'
-                                   'srr', or 'file'.  The <name> is a unique
+                                   'srr', 'google', or 'file'.  The <name> is a unique
                                    name used to refer to the repository later.
                                    The <url> is the fully qualified URL to the
                                    remote.
@@ -527,23 +638,6 @@ The available git got commands are:
                                    the remote.
 """
 
-def file_hash(filename):
-  """
-  Hash the contents of the specified file using SHA-256 and return the hash
-  as a string.
-
-  @param filename  The filename to hash the contents of
-  @return String representing the SHA-256 hash of the file contents
-  """
-  hasher = hashlib.sha256()
-  with open(filename, 'rb') as infp:
-    while True:
-      data = infp.read(8192)
-      if not data:
-        break
-      hasher.update(data)
-  return hasher.hexdigest()
-
 def mkdir_p(path):
   """
   Function to make a directory and all intermediate directories as
@@ -580,7 +674,7 @@ def status_local(real_filename, got_checksum):
   if not os.path.exists(real_filename):
     logging.debug('status_local: Did not find file %s' % real_filename)
     return False
-  sum1 = file_hash(real_filename)
+  sum1 = remote_obj.file_hash(real_filename)
   if sum1 != got_checksum:
     logging.debug('status_local: Got hash %s != file hash %s' % (sum1, got_checksum))
     return False
@@ -606,13 +700,14 @@ def get_cb(repo, got_filename, real_filename, user_params):
     with open(got_filename, 'r') as storagefp:
       gotconf = json.load(storagefp)
 
-    if status_local(real_filename, gotconf['sha-256']):
-      logging.debug("File already exists, and has right checksum; skipping download...")
-      return
-    logging.debug("Downloading remote file...")
+    logging.debug("Searching for remote...")
     for remote_obj in remote_objs:
       if remote_obj.remote_name() == gotconf['remote']:
-        remote_obj.load(real_filename, gotconf['sha-256'])
+        if status_local(real_filename, gotconf['checksum']):
+            logging.debug("File already exists, and has right checksum; skipping download...")
+            return
+        logging.debug("Downloading remote file...")
+        remote_obj.load(real_filename, gotconf['checksum'])
         os.chmod(real_filename, gotconf['mode'])
         return
     raise Exception("Could not find remote '%s' for file '%s'" % (gotconf['remote'], real_filename))
@@ -657,9 +752,9 @@ def add_cb(repo, got_filename, real_filename, user_params):
       raise Exception("Remote named '%s' does not exist" % (remote))
 
     logging.debug('add_cb: Adding %s' % real_filename)
-    csum = file_hash(real_filename)
+    csum = remote_obj.file_hash(real_filename)
     remote_obj.store(real_filename, csum)
-    gotconf = { 'sha-256': csum, 'remote': remote_obj.remote_name(), 'mode': os.stat(real_filename).st_mode }
+    gotconf = { 'checksum': csum, 'remote': remote_obj.remote_name(), 'mode': os.stat(real_filename).st_mode }
     with open(got_filename, 'w') as out:
       json.dump(gotconf, out)
     dulwich.porcelain.add(repo, got_filename)
@@ -703,7 +798,7 @@ def status_cb(repo, got_filename, real_filename, user_params):
     if not os.path.exists(real_filename):
       return "Missing locally: '%s' (remote '%s')" % (real_filename, gotconf['remote'])
 
-    if not status_local(real_filename, gotconf['sha-256']):
+    if not status_local(real_filename, gotconf['checksum']):
       return "Modified: '%s' (remote '%s')" % (real_filename, gotconf['remote'])
     # If we make it here, then the file exists locally and is the same as on
     # the remote.  If we are verbose, add this file to the list.
@@ -865,7 +960,7 @@ def parse_opts(argv):
   @param argv  The arguments passed on the command-line
   @return A tuple of all option values.
   """
-  loglevel = logging.ERROR
+  loglevel = logging.DEBUG
   logformat = "%(message)s"
   remote = None
   help_requested = False
