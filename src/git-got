@@ -704,16 +704,15 @@ def get_cb(repo, got_filename, real_filename, user_params):
     with open(got_filename, 'r') as storagefp:
       gotconf = json.load(storagefp)
       logging.debug("Searching for remote...")
-      for remote_obj in remote_objs:
-        if remote_obj.remote_name() == gotconf['remote']:
-          if status_local(real_filename, gotconf['sha-256'], remote_obj):
-              logging.debug("File already exists, and has right checksum; skipping download...")
-              return
-          logging.debug("Downloading remote file...")
-          remote_obj.load(real_filename, gotconf['sha-256'])
-          os.chmod(real_filename, gotconf['mode'])
-          return
-      raise Exception("Could not find remote '%s' for file '%s'" % (gotconf['remote'], real_filename))
+      remote_obj = next(x for x in remote_objs if x.remote_name() == gotconf['remote'])
+      if status_local(real_filename, gotconf['sha-256'], remote_obj):
+        logging.debug("File already exists, and has right checksum; skipping download...")
+        return
+      logging.debug("Downloading remote file...")
+      remote_obj.load(real_filename, gotconf['sha-256'])
+      os.chmod(real_filename, gotconf['mode'])
+  except StopIteration:
+    raise GotException("Could not find remote '%s' for file '%s'" % (gotconf['remote'], real_filename))
   except Exception as e:
     raise GotException("Failed to retrieve file '%s': %s" % (real_filename, str(e)))
 
@@ -801,15 +800,16 @@ def status_cb(repo, got_filename, real_filename, user_params):
     if not os.path.exists(real_filename):
       return "Missing locally: '%s' (remote '%s')" % (real_filename, gotconf['remote'])
 
-    for remote_obj in remote_objs:
-      if remote_obj.remote_name() == gotconf['remote']:
-        if not status_local(real_filename, gotconf['sha-256'], remote_obj):
-          return "Modified: '%s' (remote '%s')" % (real_filename, gotconf['remote'])
+    remote_obj = next(x for x in remote_objs if x.remote_name() == gotconf['remote'])
+    if not status_local(real_filename, gotconf['sha-256'], remote_obj):
+      return "Modified: '%s' (remote '%s')" % (real_filename, gotconf['remote'])
     # If we make it here, then the file exists locally and is the same as on
     # the remote.  If we are verbose, add this file to the list.
     verbose = user_params
     if verbose:
       return "Unmodified: '%s' (remote '%s')" % (real_filename, gotconf['remote'])
+  except StopIteration:
+    raise GotException("Could not find remote '%s' for file '%s'" % (gotconf['remote'], real_filename))
   except Exception as e:
     raise GotException("Failed to get status of '%s': %s" % (real_filename, str(e)))
 
@@ -965,7 +965,7 @@ def parse_opts(argv):
   @param argv  The arguments passed on the command-line
   @return A tuple of all option values.
   """
-  loglevel = logging.DEBUG
+  loglevel = logging.INFO
   logformat = "%(message)s"
   remote = None
   help_requested = False
