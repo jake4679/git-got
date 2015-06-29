@@ -706,11 +706,11 @@ def get_cb(repo, got_filename, real_filename, user_params):
       logging.debug("Searching for remote...")
       for remote_obj in remote_objs:
         if remote_obj.remote_name() == gotconf['remote']:
-          if status_local(real_filename, gotconf['checksum'], remote_obj):
+          if status_local(real_filename, gotconf['sha-256'], remote_obj):
               logging.debug("File already exists, and has right checksum; skipping download...")
               return
           logging.debug("Downloading remote file...")
-          remote_obj.load(real_filename, gotconf['checksum'])
+          remote_obj.load(real_filename, gotconf['sha-256'])
           os.chmod(real_filename, gotconf['mode'])
           return
       raise Exception("Could not find remote '%s' for file '%s'" % (gotconf['remote'], real_filename))
@@ -757,7 +757,7 @@ def add_cb(repo, got_filename, real_filename, user_params):
     logging.debug('add_cb: Adding %s' % real_filename)
     csum = remote_obj.file_hash(real_filename)
     remote_obj.store(real_filename, csum)
-    gotconf = { 'checksum': csum, 'remote': remote_obj.remote_name(), 'mode': os.stat(real_filename).st_mode }
+    gotconf = { 'sha-256': csum, 'remote': remote_obj.remote_name(), 'mode': os.stat(real_filename).st_mode }
     with open(got_filename, 'w') as out:
       json.dump(gotconf, out)
     dulwich.porcelain.add(repo, got_filename)
@@ -803,7 +803,7 @@ def status_cb(repo, got_filename, real_filename, user_params):
 
     for remote_obj in remote_objs:
       if remote_obj.remote_name() == gotconf['remote']:
-        if not status_local(real_filename, gotconf['checksum'], remote_obj):
+        if not status_local(real_filename, gotconf['sha-256'], remote_obj):
           return "Modified: '%s' (remote '%s')" % (real_filename, gotconf['remote'])
     # If we make it here, then the file exists locally and is the same as on
     # the remote.  If we are verbose, add this file to the list.
