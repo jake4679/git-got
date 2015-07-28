@@ -47,6 +47,8 @@ import getpass
 import getopt
 import logging
 import ftplib
+import collections
+import contextlib
 
 VERSION = 1
 
@@ -713,6 +715,52 @@ def status_cb(repo, got_filename, real_filename, user_params):
   except Exception as e:
     raise GotException("Failed to get status of '%s': %s" % (real_filename, str(e)))
 
+# get_tree_changes is essentially a copy of dulwich.porcelain.status(), but
+# since dulwich 0.9.4 (in Ubuntu 14.04) doesn't have this implemented, we copy
+# it here.
+def get_tree_changes(repo):
+  """Return add/delete/modify changes to tree by comparing index to HEAD.
+
+  :param repo: repo path or object
+  :return: dict with lists for each type of change
+  """
+
+  GitStatus = collections.namedtuple('GitStatus', 'staged')
+
+  @contextlib.contextmanager
+  def _noop_context_manager(obj):
+    """Context manager that has the same api as closing but does nothing."""
+    yield obj
+
+  def open_repo_closing(path_or_repo):
+    """Open an argument that can be a repository or a path for a repository.
+    returns a context manager that will close the repo on exit if the argument
+    is a path, else does nothing if the argument is a repo.
+    """
+    return _noop_context_manager(path_or_repo)
+
+  with open_repo_closing(repo) as r:
+    index = r.open_index()
+
+    # Compares the Index to the HEAD & determines changes
+    # Iterate through the changes and report add/delete/modify
+    # TODO: call out to dulwich.diff_tree somehow.
+    tracked_changes = {
+      'add': [],
+      'delete': [],
+      'modify': [],
+    }
+    for change in index.changes_from_tree(r.object_store, r[b'HEAD'].tree):
+      if not change[0][0]:
+        tracked_changes['add'].append(change[0][1])
+      elif not change[0][1]:
+        tracked_changes['delete'].append(change[0][0])
+      elif change[0][0] == change[0][1]:
+        tracked_changes['modify'].append(change[0][0])
+      else:
+        raise AssertionError('git mv ops not yet supported')
+    return GitStatus(tracked_changes)
+
 def rm_cb(repo, got_filename, real_filename, user_params):
   """
   Removes a file from got tracking.  Note that it does not remove the remote
@@ -734,7 +782,7 @@ def rm_cb(repo, got_filename, real_filename, user_params):
     except OSError:
       pass
     # now remove the got tracking file
-    if got_filename in dulwich.porcelain.status(repo).staged['add']:
+    if got_filename in get_tree_changes(repo).staged['add']:
       # In theory we should use dulwich.porcelain.rm() here, but for some
       # reason it doesn't seem to work.  This is basically the same thing.
       index = repo.open_index()
