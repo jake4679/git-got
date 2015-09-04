@@ -880,6 +880,19 @@ def walker(function, repo, origpath, user_params, args):
   """
   output = []
   logging.debug("walker: args: " + str(args))
+
+  # We need to check to make sure that the file that the user is trying to do
+  # the operation on is in the git repository (otherwise we end up with a
+  # corrupted git repo).  We already know our current working directory is the
+  # root of the git repository, so we just have to make sure that the current
+  # argument starts with a path which is the cwd.  Note that we do this check
+  # before any work so we can avoid adding some files but not others.
+  for arg in args:
+    fullpath = os.path.normpath(os.path.join(origpath, arg))
+    logging.debug('walker: processing argument %s' % fullpath)
+    if not os.path.realpath(fullpath).startswith(os.getcwd()):
+      raise GotException("Argument '%s' is not located in the git repository" % fullpath)
+
   for arg in args:
     fullpath = os.path.normpath(os.path.join(origpath, arg))
     logging.debug('walker: processing argument %s' % fullpath)
