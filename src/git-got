@@ -480,10 +480,10 @@ def usage():
 The available git got commands are:
   init <name> <type> <url>         Initialize the default remote to be used with
                                    the repository, where <type> is one of 'scp'
-                                   'srr', or 'file'.  The <name> is a unique
-                                   name used to refer to the repository later.
-                                   The <url> is the fully qualified URL to the
-                                   remote.
+                                   'srr', 'file', or 'ftp'.  The <name> is a
+                                   unique name used to refer to the repository
+                                   later.  The <url> is the fully qualified URL
+                                   to the remote.
 
   get [<file>...]                  With no arguments, retrieve all remote files
                                    to the local working area.  With one or more
