@@ -193,7 +193,17 @@ class SRR(Remote):
       'target_id' : '',
       'description' : description,
       'file' : (checksum, open(filename, 'rb'), 'application/octet-stream')})
-    self.upload_len = len(e)
+
+    # In requests_toolbelt 0.3 and earlier, the MultipartEncoder class had
+    # a __len__ method, so you could call len(e) to get the total length.  In
+    # requests_toolbelt 0.4 and later, the MultipartEncoder class has a method
+    # call len.  To accommodate both, we first try the old way (len(e)), and if
+    # that fails with a TypeError we try the new way.
+    try:
+      self.upload_len = len(e)
+    except TypeError:
+      self.upload_len = e.len
+
     self.filename = filename
     m = requests_toolbelt.multipart.encoder.MultipartEncoderMonitor(e,
                                                                     self.upload_cb)
