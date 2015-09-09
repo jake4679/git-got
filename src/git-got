@@ -516,9 +516,15 @@ The available git got commands are:
   reset <file>...                  Overwrite one or more local got files with
                                    the remote copy.  Note that directories are
                                    not allowed.
+
   rm <file>...                     Remove the specified file or files from got
                                    tracking.  Note that this does not remove the
                                    file from the remote.  Also note that
+                                   directories are not allowed.
+
+  mv <old> <new>                   Move the local got tracking file from <old>
+                                   to <new>.  Note that this does not change the
+                                   file on the remote.  Also note that
                                    directories are not allowed.
 
   add_remote <type> <name> <url>   Add an additional remote for storage.  The
@@ -870,6 +876,61 @@ def chmod_cb(repo, got_filename, real_filename, user_params):
       os.chmod(real_filename, newmode)
   except Exception as e:
     raise GotException("Failed to change mode on '%s': %s" % (real_filename, str(e)))
+
+def mv_cb(repo, got_filename, real_filename, user_params):
+  """
+  Moves a file in got tracking from one name to another.  Note that it does not
+  affect the remote file, just the local tracking.
+
+  @param repo           Dulwich repository object
+  @param got_filename   Old got meta filename
+  @param real_filename  Old real filename
+  @param user_params    New real filename
+  """
+  try:
+    if not os.path.exists(got_filename):
+      raise Exception("'%s' is not tracked by got" % (real_filename))
+
+    new_real_filename = user_params
+    (base, filename) = os.path.split(new_real_filename)
+    new_got_filename = os.path.join(base, '.%s.got' % filename)
+
+    # attempt to move the real file; it may not exist, so ignore errors
+    logging.debug("Moving real file from %s to %s" % (real_filename, new_real_filename))
+    try:
+      os.rename(real_filename, new_real_filename)
+    except OSError:
+      pass
+
+    # now move the got tracking file
+    logging.debug("Moving got tracking file from %s to %s" % (got_filename, new_got_filename))
+    if got_filename in get_tree_changes(repo).staged['add']:
+      # In theory we should use dulwich.porcelain.rm() here, but for some
+      # reason it doesn't seem to work.  This is basically the same thing.
+      index = repo.open_index()
+      del index[got_filename]
+      index.write()
+      os.rename(got_filename, new_got_filename)
+      dulwich.porcelain.add(repo, new_got_filename)
+    else:
+      os.rename(got_filename, new_got_filename)
+      dulwich.porcelain.add(repo, got_filename)
+      dulwich.porcelain.add(repo, new_got_filename)
+
+    # now move the .gitignore entry
+    logging.debug("Moving file in .gitignore")
+    infile = open('.gitignore', 'rb')
+    outfile = open('.tmp.gitignore', 'wb')
+    for line in infile.xreadlines():
+      if line != real_filename + "\n":
+        outfile.write(line)
+    outfile.write('%s\n' % new_real_filename)
+    outfile.close()
+    infile.close()
+    os.rename(".tmp.gitignore", ".gitignore")
+    dulwich.porcelain.add(repo, ".gitignore")
+  except Exception as e:
+    raise GotException("Failed to move '%s' to '%s': %s" % (real_filename, new_real_filename, str(e)))
 
 def walker(function, repo, origpath, user_params, args):
   """
@@ -1266,6 +1327,27 @@ def chmod_command(args, repo, origpath):
   mode = args[2]
   walker(chmod_cb, repo, origpath, mode, [filename])
 
+def mv_command(args, repo, origpath):
+  """
+  Run the mv command to move a file in git-got tracking from one name to
+  another.  Moving subdirectories is not allowed.
+
+  @param args      The non-option arguments to this command
+  @param repo      Dulwich repository object
+  @param origpath  The original path that git-got was started in
+  """
+  if len(args) != 3:
+    raise GotException("", need_usage=True)
+
+  # we only allow moving files (not subdirectories); check that here
+  if os.path.isdir(os.path.join(origpath, args[1])):
+    raise GotException("Got only allows files, not subdirectories, to be moved")
+
+  # Note that going through walker here is a bit of overkill, since we know
+  # that we will only have a single argument.  However, we do this so that the
+  # mv command goes through all of the same checks as the rest of the commands.
+  walker(mv_cb, repo, origpath, args[2], [args[1]])
+
 ############################### MAIN ##########################################
 def main(argv):
   loglevel = logging.ERROR
@@ -1325,6 +1407,8 @@ def main(argv):
       list_remotes_command(args)
     elif command == "chmod":
       chmod_command(args, repo, origpath)
+    elif command == "mv":
+      mv_command(args, repo, origpath)
     else:
       raise GotException("", need_usage=True)
     return 0
