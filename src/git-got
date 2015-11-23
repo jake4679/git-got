@@ -522,6 +522,10 @@ The available git got commands are:
                                    file from the remote.  Also note that
                                    directories are not allowed.
 
+  rm_local                         Remove all of the locally download files.
+                                   This will cause all of them to be fetched on
+                                   the next "git got get".
+
   mv <old> <new>                   Move the local got tracking file from <old>
                                    to <new>.  Note that this does not change the
                                    file on the remote.  Also note that
@@ -931,6 +935,20 @@ def mv_cb(repo, got_filename, real_filename, user_params):
     dulwich.porcelain.add(repo, ".gitignore")
   except Exception as e:
     raise GotException("Failed to move '%s' to '%s': %s" % (real_filename, new_real_filename, str(e)))
+
+def rm_local_cb(repo, got_filename, real_filename, user_params):
+  """
+  Removes the locally downloaded version of the real file.  This does not affect
+  the got tracking or the remote file.
+  @param repo           Dulwich repository object
+  @param got_filename   Got meta filename
+  @param real_filename  Real filename
+  @param user_params    None
+  """
+  try:
+    os.remove(real_filename)
+  except OSError:
+    pass
 
 def walker(function, repo, origpath, user_params, args):
   """
@@ -1348,6 +1366,21 @@ def mv_command(args, repo, origpath):
   # mv command goes through all of the same checks as the rest of the commands.
   walker(mv_cb, repo, origpath, args[2], [args[1]])
 
+def rm_local_command(args, repo, origpath):
+  """
+  Run the rm_local command to remove all local files.  This will cause all of
+  the got tracked files to be re-downloaded on the next git got get.
+
+  @param args      The non-option arguments to this command
+  @param repo      Dulwich repository object
+  @param origpath  The original path that git-got was started in
+  """
+
+  if len(args) != 1:
+    raise GotException("", need_usage=True)
+
+  walker(rm_local_cb, repo, origpath, None, ['.'])
+
 ############################### MAIN ##########################################
 def main(argv):
   loglevel = logging.ERROR
@@ -1409,6 +1442,8 @@ def main(argv):
       chmod_command(args, repo, origpath)
     elif command == "mv":
       mv_command(args, repo, origpath)
+    elif command == "rm_local":
+      rm_local_command(args, repo, origpath)
     else:
       raise GotException("", need_usage=True)
     return 0
