@@ -896,10 +896,11 @@ def mv_cb(repo, got_filename, real_filename, user_params):
   @param user_params    New real filename
   """
   try:
+    new_real_filename = user_params
+
     if not os.path.exists(got_filename):
       raise Exception("'%s' is not tracked by got" % (real_filename))
 
-    new_real_filename = user_params
     (base, filename) = os.path.split(new_real_filename)
     new_got_filename = os.path.join(base, '.%s.got' % filename)
 
