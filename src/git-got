@@ -363,12 +363,11 @@ class FTP(Remote):
       logging.debug("File existed on remote, skipping upload...")
       return
 
-    fp = open(filename, 'rb')
-    self.total = os.fstat(fp.fileno()).st_size
-    self.total_transferred = 0
-    self.filename = filename
-    ftp.storbinary('STOR %s' % remotefile, fp, self.block_size, self._transfer_cb)
-    fp.close()
+    with open(filename, 'rb') as fp:
+      self.total = file_length(fp)
+      self.total_transferred = 0
+      self.filename = filename
+      ftp.storbinary('STOR %s' % remotefile, fp, self.block_size, self._transfer_cb)
 
     print_transfer_string(self.total, self.total, self.filename, "Uploading")
     ftp.close()
@@ -396,10 +395,9 @@ class FTP(Remote):
     self.total = ftp.size(remotefile)
     self.filename = filename
     self.total_transferred = 0
-    self.download_fp = open(filename, 'wb')
-    ftp.retrbinary("RETR %s" % remotefile, self._write_and_print_cb)
+    with open(filename, 'wb') as self.download_fp:
+      ftp.retrbinary("RETR %s" % remotefile, self._write_and_print_cb)
 
-    self.download_fp.close()
     ftp.close()
 
     sys.stdout.write("\n")
@@ -715,18 +713,15 @@ def add_cb(repo, got_filename, real_filename, user_params):
     # and do the right thing in both cases.
     already_in_gitignore = False
     if os.path.exists('.gitignore'):
-      gitigf = open('.gitignore', 'rb')
-      for line in gitigf.xreadlines():
-        if line == real_filename + "\n":
-          already_in_gitignore = True
-          break
-
-      gitigf.close()
+      with open('.gitignore', 'rb') as gitigf:
+        for line in gitigf.xreadlines():
+          if line == real_filename + "\n":
+            already_in_gitignore = True
+            break
 
     if not already_in_gitignore:
-      gitigf = open('.gitignore', 'ab')
-      gitigf.write('%s\n' % real_filename)
-      gitigf.close()
+      with open('.gitignore', 'ab') as gitigf:
+        gitigf.write('%s\n' % real_filename)
       dulwich.porcelain.add(repo, '.gitignore')
   except Exception as e:
     raise GotException("Failed to add '%s': %s" % (real_filename, str(e)))
