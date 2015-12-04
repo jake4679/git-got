@@ -417,7 +417,7 @@ def RemoteObjFactory(remote_type, remote, configuration):
   elif remote_type == 'ftp':
     obj = FTP(configuration)
   else:
-    raise GotException("", need_usage=True)
+    raise GotException("Invalid remote type '%s'" % remote_type, need_usage=True)
 
   parser = urlparse.urlparse(remote)
   objscheme = obj.scheme()
@@ -1132,7 +1132,7 @@ def add_remote(args, default, repo):
   @param repo     Dulwich repository object
   """
   if len(args) != 4:
-    raise GotException("", need_usage=True)
+    raise GotException("Not enough arguments to init/add_remote", need_usage=True)
 
   name = args[1]
   remote_type = args[2]
@@ -1183,7 +1183,7 @@ def add_command(args, repo, origpath, remote):
   @param remote    The remote to add this file to (maybe None, which means use the default)
   """
   if len(args) < 2:
-    raise GotException("", need_usage=True)
+    raise GotException("Not enough arguments to add command", need_usage=True)
 
   # we only allow adding files (not subdirectories); check that here
   for arg in args[1:]:
@@ -1202,7 +1202,7 @@ def reset_command(args, repo, origpath):
   @param origpath  The original path that git-got was started in
   """
   if len(args) < 2:
-    raise GotException("", need_usage=True)
+    raise GotException("Not enough arguments to reset command", need_usage=True)
 
   # we only allow resetting files (not subdirectories); check that here
   for arg in args[1:]:
@@ -1227,7 +1227,7 @@ def get_command(args, repo, origpath):
   elif len(args) > 1:
     path = args[1:]
   else:
-    raise GotException("", need_usage=True)
+    raise GotException("Not enough arguments to get command", need_usage=True)
 
   walker(get_cb, repo, origpath, None, path)
 
@@ -1244,7 +1244,7 @@ def status_command(args, repo, origpath, verbose):
   elif len(args) > 1:
     path = args[1:]
   else:
-    raise GotException("", need_usage=True)
+    raise GotException("Not enough arguments to status command", need_usage=True)
 
   changes = walker(status_cb, repo, origpath, verbose, path)
 
@@ -1263,7 +1263,7 @@ def rm_command(args, repo, origpath):
   @param origpath  The original path that git-got was started in
   """
   if len(args) < 2:
-    raise GotException("", need_usage=True)
+    raise GotException("Not enough arguments to rm command", need_usage=True)
 
   # we only allow removing files (not subdirectories); check that here
   for arg in args[1:]:
@@ -1331,7 +1331,7 @@ def list_remotes_command(args):
   @param args      The non-option arguments to this command
   """
   if len(args) != 1:
-    raise GotException("", need_usage=True)
+    raise GotException("Invalid number of arguments to list_remotes command", need_usage=True)
 
   print("   Name:\tType:\tURL:")
   print("-" * 80)
@@ -1360,7 +1360,7 @@ def mv_command(args, repo, origpath):
   @param origpath  The original path that git-got was started in
   """
   if len(args) != 3:
-    raise GotException("", need_usage=True)
+    raise GotException("Invalid number of arguments to mv command", need_usage=True)
 
   # we only allow moving files (not subdirectories); check that here
   if os.path.isdir(os.path.join(origpath, args[1])):
@@ -1382,7 +1382,7 @@ def rm_local_command(args, repo, origpath):
   """
 
   if len(args) != 1:
-    raise GotException("", need_usage=True)
+    raise GotException("Invalid number of arguments to rm_local command", need_usage=True)
 
   walker(rm_local_cb, repo, origpath, None, ['.'])
 
