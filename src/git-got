@@ -472,19 +472,31 @@ def print_transfer_string(transferred, total, filename, direction):
     percent = 100
   else:
     percent = int(transferred * 100 / total)
-  strlen_no_file = len(direction) + 1 + 1 + len(str(divided_tran)) + 1 + len(str(divided_total)) + 1 + len(suffix) + 2 + 3 + 2 + 2
+  # The "fixed" length for our printed string is the length of the direction,
+  # plus one for the space, plus one for the opening quote for the filename,
+  # plus one for the closing quote for the filename, plus one for a space,
+  # plus the length of the transferred number, plus one for the divide sign,
+  # plus one for the length of the total number, plus one for a space, plus
+  # the length of the suffix (GB, MB, etc), plus one for a space, plus one for
+  # the opening parentheses for the percentage, plus 3 for the percentage (fixed
+  # so that we don't change how we truncate the filename at the end of the
+  # transfer), plus one for the percent sign, plus one for the closing
+  # parentheses.
+  strlen_no_file = len(direction) + 1 + 1 + 1 + 1 + len(str(divided_tran)) + 1 + len(str(divided_total)) + 1 + len(suffix) + 1 + 1 + 3 + 1 + 1
 
-  filenamelen = len(filename)
+  # Now that we know the fixed length of the string, we can figure out how much
+  # of the filename we can afford to print.  Note that we want to print the
+  # end of the filename, as that is likely to be the most helpful.  We do this
+  # by reversing the string (filename[::-1]), taking the first 80-strlen_no_file
+  # characters, then reversing back.
   if strlen_no_file + len(filename) > 80:
-    filenamelen = 80 - strlen_no_file
-
+    filename = filename[::-1][:(80-strlen_no_file)][::-1]
   sys.stdout.write("\r")
-  sys.stdout.write("{0} '{1:.{2}s}' {3}/{4} {5} ({6}%)".format(direction,
-                                                               filename,
-                                                               filenamelen,
-                                                               divided_tran,
-                                                               divided_total,
-                                                               suffix, percent))
+  sys.stdout.write("{0} '{1}' {2}/{3} {4} ({5}%)".format(direction,
+                                                         filename,
+                                                         divided_tran,
+                                                         divided_total,
+                                                         suffix, percent))
 
   sys.stdout.flush()
 
