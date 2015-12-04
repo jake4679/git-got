@@ -283,7 +283,7 @@ class File(Remote):
     src = open(srcpath, "rb")
     dst = open(dstpath, "wb")
 
-    total_len = os.fstat(src.fileno()).st_size
+    total_len = file_length(src)
     transferred = 0
 
     while True:
@@ -581,6 +581,13 @@ def file_hash(filename):
         break
       hasher.update(data)
   return hasher.hexdigest()
+
+def file_length(fp):
+  old = fp.tell()
+  fp.seek(0, 2)
+  ret = fp.tell()
+  fp.seek(old)
+  return ret
 
 def mkdir_p(path):
   """
