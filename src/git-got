@@ -1003,14 +1003,11 @@ def arguments_are_in_git_repository(args, origpath):
     if not os.path.realpath(fullpath).startswith(os.getcwd()):
       raise GotException("Argument '%s' is not located in the git repository" % fullpath)
 
-def recursive_walker(function, repo, origpath, cb_params, args):
+def add_walker(repo, origpath, cb_params, args):
   """
-  A function to walk down a list of files/directories, calling a callback on
-  each one.  The callback is expected to have a signature of:
+  A function to walk down a list of files/directories, calling the add_cb for
+  each argument.
 
-  cb(repo, got_filename, real_filename, cb_params)
-
-  @param function     The function to call on each got managed file
   @param repo         Dulwich repository object to pass into the callback
   @param origpath     The original current working directory when got was
                       invoked, used to figure out the appropriate paths
@@ -1026,7 +1023,7 @@ def recursive_walker(function, repo, origpath, cb_params, args):
 
   for arg in args:
     fullpath = os.path.normpath(os.path.join(origpath, arg))
-    logging.debug('recursive_walker: processing argument %s' % fullpath)
+    logging.debug('add_walker: processing argument %s' % fullpath)
     if os.path.isdir(fullpath):
       for base, dirs, filenames in os.walk(fullpath):
         if '.git' in dirs:
@@ -1040,15 +1037,15 @@ def recursive_walker(function, repo, origpath, cb_params, args):
             continue
           realpath = os.path.normpath(os.path.join(base, filename))
           gotpath = os.path.normpath(os.path.join(base, "." + filename + ".got"))
-          logging.debug('recursive_walker: processing file %s' % realpath)
-          output.append(function(repo, gotpath, realpath, cb_params))
+          logging.debug('add_walker: processing file %s' % realpath)
+          output.append(add_cb(repo, gotpath, realpath, cb_params))
     else:
       # this covers both the case where the argument is a file and the case
       # where the full path isn't a file at all (which can happen if the local
       # version of the file was deleted)
-      logging.debug('recursive_walker: processing file %s' % fullpath)
+      logging.debug('add_walker: processing file %s' % fullpath)
       (base, filename) = os.path.split(fullpath)
-      output.append(function(repo, os.path.join(base, '.%s.got' % filename), fullpath, cb_params))
+      output.append(add_cb(repo, os.path.join(base, '.%s.got' % filename), fullpath, cb_params))
   return output
 
 def walker(function, repo, origpath, cb_params, args):
@@ -1100,7 +1097,7 @@ def parse_opts(argv):
   """
   A function to parse the command-line arguments and return the values in
   a tuple.  This function always returns the same tuple; the default value
-  is return for those arguments that were not specified on the command-line.
+  is returned for those arguments that were not specified on the command-line.
 
   @param argv  The arguments passed on the command-line
   @return A tuple of all option values.
@@ -1278,15 +1275,13 @@ def add_command(args, recurse, repo, origpath, remote):
   if len(args) < 2:
     raise GotException("Not enough arguments to add command", need_usage=True)
 
-  if recurse:
-    recursive_walker(add_cb, repo, origpath, remote, args[1:])
-  else:
+  if not recurse:
     # we only allow adding files (not subdirectories); check that here
     for arg in args[1:]:
       if os.path.isdir(os.path.join(origpath, arg)):
         raise GotException("Got only allows files, not subdirectories, to be added")
 
-    walker(add_cb, repo, origpath, remote, args[1:])
+    add_walker(repo, origpath, remote, args[1:])
 
 def reset_command(args, repo, origpath):
   """
