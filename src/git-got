@@ -642,16 +642,16 @@ def status_local(real_filename, got_checksum):
   return True
 
 ####################### WALKER AND CALLBACKS ##################################
-def get_cb(repo, got_filename, real_filename, user_params):
+def get_cb(repo, got_filename, real_filename, cb_params):
   """
   Fetches the specified file from the remote if necessary.
 
   @param repo           Dulwich repository object
   @param got_filename   Got meta filename
   @param real_filename  Real filename
-  @param user_params    Whether to force the transfer or not
+  @param cb_params      Whether to force the transfer or not
   """
-  force = user_params
+  force = cb_params
   try:
     logging.debug('get_cb: Using %s for local file' % real_filename)
     if not os.path.exists(got_filename):
@@ -675,7 +675,7 @@ def get_cb(repo, got_filename, real_filename, user_params):
   except Exception as e:
     raise GotException("Failed to retrieve file '%s': %s" % (real_filename, str(e)))
 
-def reset_cb(repo, got_filename, real_filename, user_params):
+def reset_cb(repo, got_filename, real_filename, cb_params):
   """
   Resets the specified file to the version from the got database, re-downloading
   it from the remote if necessary.
@@ -683,21 +683,21 @@ def reset_cb(repo, got_filename, real_filename, user_params):
   @param repo           Dulwich repository object
   @param got_filename   Got meta filename
   @param real_filename  Real filename
-  @param user_params    Ignored
+  @param cb_params      Ignored
   """
-  get_cb(repo, got_filename, real_filename, user_params)
+  get_cb(repo, got_filename, real_filename, cb_params)
 
-def add_cb(repo, got_filename, real_filename, user_params):
+def add_cb(repo, got_filename, real_filename, cb_params):
   """
   Adds a new file to the got database and uploads it to the remote.
 
   @param repo           Dulwich repository object
   @param got_filename   Got meta filename
   @param real_filename  Real filename
-  @param user_params    A string representing the remote to use
+  @param cb_params      A string representing the remote to use
   """
   try:
-    remote = user_params
+    remote = cb_params
     remote_obj = None
     for tmp in remote_objs:
       if remote is None:
@@ -739,7 +739,7 @@ def add_cb(repo, got_filename, real_filename, user_params):
   except Exception as e:
     raise GotException("Failed to add '%s': %s" % (real_filename, str(e)))
 
-def status_cb(repo, got_filename, real_filename, user_params):
+def status_cb(repo, got_filename, real_filename, cb_params):
   """
   Retrieves the status of the filename specified.  Invoked from the main
   walker loop.
@@ -747,7 +747,7 @@ def status_cb(repo, got_filename, real_filename, user_params):
   @param repo           Dulwich repository object
   @param got_filename   Got meta filename
   @param real_filename  Real filename
-  @param user_params    Verbose or not
+  @param cb_params      Verbose or not
   """
   try:
     with open(got_filename, 'r') as storagefp:
@@ -760,7 +760,7 @@ def status_cb(repo, got_filename, real_filename, user_params):
       return "Modified: '%s' (remote '%s')" % (real_filename, gotconf['remote'])
     # If we make it here, then the file exists locally and is the same as on
     # the remote.  If we are verbose, add this file to the list.
-    verbose = user_params
+    verbose = cb_params
     if verbose:
       return "Unmodified: '%s' (remote '%s')" % (real_filename, gotconf['remote'])
   except Exception as e:
@@ -812,7 +812,7 @@ def get_tree_changes(repo):
         raise AssertionError('git mv ops not yet supported')
     return GitStatus(tracked_changes)
 
-def rm_cb(repo, got_filename, real_filename, user_params):
+def rm_cb(repo, got_filename, real_filename, cb_params):
   """
   Removes a file from got tracking.  Note that it does not remove the remote
   file, just the local tracking.
@@ -820,7 +820,7 @@ def rm_cb(repo, got_filename, real_filename, user_params):
   @param repo           Dulwich repository object
   @param got_filename   Got meta filename
   @param real_filename  Real filename
-  @param user_params    Ignored
+  @param cb_params      Ignored
   """
   try:
     if not os.path.exists(got_filename):
@@ -857,22 +857,22 @@ def rm_cb(repo, got_filename, real_filename, user_params):
   except Exception as e:
     raise GotException("Failed to remove '%s': %s" % (real_filename, str(e)))
 
-def remove_remote_check_cb(repo, got_filename, real_filename, user_params):
+def remove_remote_check_cb(repo, got_filename, real_filename, cb_params):
   """
   Check to see that whether this file is linked to the remote passed in as
-  "user_params[0]".  If it is, add the name of this file to the list of links
-  stored in "user_params[1]"
+  "cb_params[0]".  If it is, add the name of this file to the list of links
+  stored in "cb_params[1]"
 
   @param repo           Dulwich repository object (ignored)
   @param got_filename   Got meta filename (ignored)
   @param real_filename  Real filename
-  @param user_params    The name of the remote
+  @param cb_params      The name of the remote
   """
   try:
     with open(got_filename, 'r') as storagefp:
       gotconf = json.load(storagefp)
 
-    remote_name = user_params
+    remote_name = cb_params
 
     if gotconf['remote'] == remote_name:
       return real_filename
@@ -881,20 +881,20 @@ def remove_remote_check_cb(repo, got_filename, real_filename, user_params):
   except Exception as e:
     raise GotException("Failed to check remote link '%s': %s" % (real_filename, str(e)))
 
-def chmod_cb(repo, got_filename, real_filename, user_params):
+def chmod_cb(repo, got_filename, real_filename, cb_params):
   """
   Change the permission bits on a got file.
 
   @param repo           Dulwich repository object
   @param got_filename   Got meta filename
   @param real_filename  Real filename
-  @param user_params    The new mode for the file
+  @param cb_params      The new mode for the file
   """
   try:
     with open(got_filename, 'r') as storagefp:
       gotconf = json.load(storagefp)
 
-    newmode = int(user_params, 0)
+    newmode = int(cb_params, 0)
 
     if newmode == gotconf['mode']:
       return
@@ -912,7 +912,7 @@ def chmod_cb(repo, got_filename, real_filename, user_params):
   except Exception as e:
     raise GotException("Failed to change mode on '%s': %s" % (real_filename, str(e)))
 
-def mv_cb(repo, got_filename, real_filename, user_params):
+def mv_cb(repo, got_filename, real_filename, cb_params):
   """
   Moves a file in got tracking from one name to another.  Note that it does not
   affect the remote file, just the local tracking.
@@ -920,10 +920,10 @@ def mv_cb(repo, got_filename, real_filename, user_params):
   @param repo           Dulwich repository object
   @param got_filename   Old got meta filename
   @param real_filename  Old real filename
-  @param user_params    New real filename
+  @param cb_params      New real filename
   """
   try:
-    new_real_filename = user_params
+    new_real_filename = cb_params
 
     if not os.path.exists(got_filename):
       raise Exception("'%s' is not tracked by got" % (real_filename))
@@ -968,14 +968,14 @@ def mv_cb(repo, got_filename, real_filename, user_params):
   except Exception as e:
     raise GotException("Failed to move '%s' to '%s': %s" % (real_filename, new_real_filename, str(e)))
 
-def rm_local_cb(repo, got_filename, real_filename, user_params):
+def rm_local_cb(repo, got_filename, real_filename, cb_params):
   """
   Removes the locally downloaded version of the real file.  This does not affect
   the got tracking or the remote file.
   @param repo           Dulwich repository object
   @param got_filename   Got meta filename
   @param real_filename  Real filename
-  @param user_params    None
+  @param cb_params      None
   """
   try:
     os.remove(real_filename)
@@ -991,26 +991,7 @@ def file_is_managed_by_git(repo, filename):
   else:
     return True
 
-def recursive_walker(function, repo, origpath, user_params, args):
-  """
-  A function to walk down a list of files/directories, calling a callback on
-  each one.  The callback is expected to have a signature of:
-
-  cb(repo, got_filename, real_filename, user_params)
-
-  @param function     The function to call on each got managed file
-  @param repo         Dulwich repository object to pass into the callback
-  @param origpath     The original current working directory when got was
-                      invoked, used to figure out the appropriate paths
-  @param user_params  Callback specific parameters to pass to the callback
-  @param args         The list of files/directories to walk
-
-  @return A string built from the output of all invocations of the callback
-          function.
-  """
-  output = []
-  logging.debug("recursive_walker: args: " + str(args))
-
+def arguments_are_in_git_repository(args, origpath):
   # We need to check to make sure that the files/directories that the user is
   # trying to do the operation on is in the git repository (otherwise we end up
   # with a corrupted git repo).  We already know our current working directory
@@ -1019,9 +1000,29 @@ def recursive_walker(function, repo, origpath, user_params, args):
   # check before any work so we can avoid adding some files but not others.
   for arg in args:
     fullpath = os.path.normpath(os.path.join(origpath, arg))
-    logging.debug('recursive_walker: processing argument %s' % fullpath)
     if not os.path.realpath(fullpath).startswith(os.getcwd()):
       raise GotException("Argument '%s' is not located in the git repository" % fullpath)
+
+def recursive_walker(function, repo, origpath, cb_params, args):
+  """
+  A function to walk down a list of files/directories, calling a callback on
+  each one.  The callback is expected to have a signature of:
+
+  cb(repo, got_filename, real_filename, cb_params)
+
+  @param function     The function to call on each got managed file
+  @param repo         Dulwich repository object to pass into the callback
+  @param origpath     The original current working directory when got was
+                      invoked, used to figure out the appropriate paths
+  @param cb_params    Callback specific parameters to pass to the callback
+  @param args         The list of files/directories to walk
+
+  @return A string built from the output of all invocations of the callback
+          function.
+  """
+  arguments_are_in_git_repository(args, origpath)
+
+  output = []
 
   for arg in args:
     fullpath = os.path.normpath(os.path.join(origpath, arg))
@@ -1040,47 +1041,36 @@ def recursive_walker(function, repo, origpath, user_params, args):
           realpath = os.path.normpath(os.path.join(base, filename))
           gotpath = os.path.normpath(os.path.join(base, "." + filename + ".got"))
           logging.debug('recursive_walker: processing file %s' % realpath)
-          output.append(function(repo, gotpath, realpath, user_params))
+          output.append(function(repo, gotpath, realpath, cb_params))
     else:
       # this covers both the case where the argument is a file and the case
       # where the full path isn't a file at all (which can happen if the local
       # version of the file was deleted)
       logging.debug('recursive_walker: processing file %s' % fullpath)
       (base, filename) = os.path.split(fullpath)
-      output.append(function(repo, os.path.join(base, '.%s.got' % filename), fullpath, user_params))
+      output.append(function(repo, os.path.join(base, '.%s.got' % filename), fullpath, cb_params))
   return output
 
-def walker(function, repo, origpath, user_params, args):
+def walker(function, repo, origpath, cb_params, args):
   """
   A function to walk down a list of files/directories, calling a callback on
   each one.  The callback is expected to have a signature of:
 
-  cb(repo, got_filename, real_filename, user_params)
+  cb(repo, got_filename, real_filename, cb_params)
 
   @param function     The function to call on each got managed file
   @param repo         Dulwich repository object to pass into the callback
   @param origpath     The original current working directory when got was
                       invoked, used to figure out the appropriate paths
-  @param user_params  Callback specific parameters to pass to the callback
+  @param cb_params    Callback specific parameters to pass to the callback
   @param args         The list of files/directories to walk
 
   @return A string built from the output of all invocations of the callback
           function.
   """
   output = []
-  logging.debug("walker: args: " + str(args))
 
-  # We need to check to make sure that the file that the user is trying to do
-  # the operation on is in the git repository (otherwise we end up with a
-  # corrupted git repo).  We already know our current working directory is the
-  # root of the git repository, so we just have to make sure that the current
-  # argument starts with a path which is the cwd.  Note that we do this check
-  # before any work so we can avoid adding some files but not others.
-  for arg in args:
-    fullpath = os.path.normpath(os.path.join(origpath, arg))
-    logging.debug('walker: processing argument %s' % fullpath)
-    if not os.path.realpath(fullpath).startswith(os.getcwd()):
-      raise GotException("Argument '%s' is not located in the git repository" % fullpath)
+  arguments_are_in_git_repository(args, origpath)
 
   for arg in args:
     fullpath = os.path.normpath(os.path.join(origpath, arg))
@@ -1095,14 +1085,14 @@ def walker(function, repo, origpath, user_params, args):
           realpath = os.path.normpath(os.path.join(base, filename[1:-4]))
           gotpath = os.path.normpath(os.path.join(base, filename))
           logging.debug('walker: processing file %s' % realpath)
-          output.append(function(repo, gotpath, realpath, user_params))
+          output.append(function(repo, gotpath, realpath, cb_params))
     else:
       # this covers both the case where the argument is a file and the case
       # where the full path isn't a file at all (which can happen if the local
       # version of the file was deleted)
       logging.debug('walker: processing file %s' % fullpath)
       (base, filename) = os.path.split(fullpath)
-      output.append(function(repo, os.path.join(base, '.%s.got' % filename), fullpath, user_params))
+      output.append(function(repo, os.path.join(base, '.%s.got' % filename), fullpath, cb_params))
   return output
 
 ############################## MAIN HELPERS ##################################
