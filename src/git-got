@@ -518,11 +518,15 @@ The available git got commands are:
                                    the file from the remote, even if it already
                                    exists locally.
 
-  add [-r <remote] <file>...       Add one or more files to the remote
-                                   repository.  Note that directories are not
+  add [-r <remote] [-R] <file>...  Add one or more files to the remote
+                                   repository.  By default, directories are not
                                    allowed.  The optional -r argument allows the
                                    user to specify which remote to use; if not
-                                   specified, the default remote is used.
+                                   specified, the default remote is used.  The
+                                   optional -R flag can be used to recurse into
+                                   the specified directory, adding all the
+                                   files not already managed by git into git
+                                   got.
 
   status [-v] [<file>...]          With no arguments, request the status of all
                                    got tracked files.  With one or more
@@ -536,10 +540,13 @@ The available git got commands are:
                                    the remote copy.  Note that directories are
                                    not allowed.
 
-  rm <file>...                     Remove the specified file or files from got
+  rm [-R] <file>...                Remove the specified file or files from got
                                    tracking.  Note that this does not remove the
-                                   file from the remote.  Also note that
-                                   directories are not allowed.
+                                   file from the remote. By default, directories
+                                   are not allowed.  The optional -R argument
+                                   can be used to recurse into the specified
+                                   directory, removing all files managed by
+                                   git got.
 
   rm_local                         Remove all of the locally download files.
                                    This will cause all of them to be fetched on
@@ -975,6 +982,74 @@ def rm_local_cb(repo, got_filename, real_filename, user_params):
   except OSError:
     pass
 
+def file_is_managed_by_git(repo, filename):
+  w = repo.get_walker(paths=[filename], max_entries=1)
+  try:
+    c = iter(w).next().commit
+  except StopIteration:
+    return False
+  else:
+    return True
+
+def recursive_walker(function, repo, origpath, user_params, args):
+  """
+  A function to walk down a list of files/directories, calling a callback on
+  each one.  The callback is expected to have a signature of:
+
+  cb(repo, got_filename, real_filename, user_params)
+
+  @param function     The function to call on each got managed file
+  @param repo         Dulwich repository object to pass into the callback
+  @param origpath     The original current working directory when got was
+                      invoked, used to figure out the appropriate paths
+  @param user_params  Callback specific parameters to pass to the callback
+  @param args         The list of files/directories to walk
+
+  @return A string built from the output of all invocations of the callback
+          function.
+  """
+  output = []
+  logging.debug("recursive_walker: args: " + str(args))
+
+  # We need to check to make sure that the files/directories that the user is
+  # trying to do the operation on is in the git repository (otherwise we end up
+  # with a corrupted git repo).  We already know our current working directory
+  # is the root of the git repository, so we just have to make sure that the
+  # current argument starts with a path which is the cwd.  Note that we do this
+  # check before any work so we can avoid adding some files but not others.
+  for arg in args:
+    fullpath = os.path.normpath(os.path.join(origpath, arg))
+    logging.debug('recursive_walker: processing argument %s' % fullpath)
+    if not os.path.realpath(fullpath).startswith(os.getcwd()):
+      raise GotException("Argument '%s' is not located in the git repository" % fullpath)
+
+  for arg in args:
+    fullpath = os.path.normpath(os.path.join(origpath, arg))
+    logging.debug('recursive_walker: processing argument %s' % fullpath)
+    if os.path.isdir(fullpath):
+      for base, dirs, filenames in os.walk(fullpath):
+        if '.git' in dirs:
+          dirs.remove('.git')
+        if '.got' in dirs:
+          dirs.remove('.got')
+        for filename in filenames:
+          # When we are recursively adding, we don't want to touch any files
+          # that are already managed by git.
+          if file_is_managed_by_git(repo, os.path.normpath(os.path.join(base, filename))):
+            continue
+          realpath = os.path.normpath(os.path.join(base, filename))
+          gotpath = os.path.normpath(os.path.join(base, "." + filename + ".got"))
+          logging.debug('recursive_walker: processing file %s' % realpath)
+          output.append(function(repo, gotpath, realpath, user_params))
+    else:
+      # this covers both the case where the argument is a file and the case
+      # where the full path isn't a file at all (which can happen if the local
+      # version of the file was deleted)
+      logging.debug('recursive_walker: processing file %s' % fullpath)
+      (base, filename) = os.path.split(fullpath)
+      output.append(function(repo, os.path.join(base, '.%s.got' % filename), fullpath, user_params))
+  return output
+
 def walker(function, repo, origpath, user_params, args):
   """
   A function to walk down a list of files/directories, calling a callback on
@@ -1046,10 +1121,11 @@ def parse_opts(argv):
   help_requested = False
   verbose = False
   force = False
+  recurse = False
   try:
-    opts, args = getopt.gnu_getopt(argv[1:], 'd:fhr:v', ['debug', 'force',
-                                                         'help', 'remote',
-                                                         'verbose'])
+    opts, args = getopt.gnu_getopt(argv[1:], 'd:fhRr:v', ['debug', 'force',
+                                                          'help', 'remote',
+                                                          'recurse', 'verbose'])
   except getopt.GetoptError as err:
     raise GotException(str(err), need_usage=True)
 
@@ -1075,6 +1151,8 @@ def parse_opts(argv):
       force = True
     elif o in ("-h", "--help"):
       help_requested = True
+    elif o in ("-R", "--recurse"):
+      recurse = True
     elif o in ("-r", "--remote"):
       remote = a
     elif o in ("-v", "--verbose"):
@@ -1082,7 +1160,7 @@ def parse_opts(argv):
     else:
       raise GotException("unhandled option '%s'" % o)
 
-  return (args, loglevel, logformat, remote, help_requested, verbose, force)
+  return (args, loglevel, logformat, remote, help_requested, verbose, force, recurse)
 
 def find_git_path_and_chdir():
   """
@@ -1196,12 +1274,13 @@ def upgrade_command(args):
   if len(args) != 1:
     raise GotException("", need_usage=True)
 
-def add_command(args, repo, origpath, remote):
+def add_command(args, recurse, repo, origpath, remote):
   """
   Run the add command to add a file to git-got tracking.  Addition of
   subdirectories is not allowed.
 
   @param args      The non-option arguments to this command
+  @param recurse   Whether to recurse into the directories
   @param repo      Dulwich repository object
   @param origpath  The original path that git-got was started in
   @param remote    The remote to add this file to (maybe None, which means use the default)
@@ -1209,12 +1288,15 @@ def add_command(args, repo, origpath, remote):
   if len(args) < 2:
     raise GotException("Not enough arguments to add command", need_usage=True)
 
-  # we only allow adding files (not subdirectories); check that here
-  for arg in args[1:]:
-    if os.path.isdir(os.path.join(origpath, arg)):
-      raise GotException("Got only allows files, not subdirectories, to be added")
+  if recurse:
+    recursive_walker(add_cb, repo, origpath, remote, args[1:])
+  else:
+    # we only allow adding files (not subdirectories); check that here
+    for arg in args[1:]:
+      if os.path.isdir(os.path.join(origpath, arg)):
+        raise GotException("Got only allows files, not subdirectories, to be added")
 
-  walker(add_cb, repo, origpath, remote, args[1:])
+    walker(add_cb, repo, origpath, remote, args[1:])
 
 def reset_command(args, repo, origpath):
   """
@@ -1277,22 +1359,24 @@ def status_command(args, repo, origpath, verbose):
     if None != change:
       print('# %s' % change)
 
-def rm_command(args, repo, origpath):
+def rm_command(args, recurse, repo, origpath):
   """
   Run the rm command to remove a file from git-got tracking.  Removal of
   subdirectories is not allowed.
 
   @param args      The non-option arguments to this command
+  @param recurse   Whether to recurse into the directories
   @param repo      Dulwich repository object
   @param origpath  The original path that git-got was started in
   """
   if len(args) < 2:
     raise GotException("Not enough arguments to rm command", need_usage=True)
 
-  # we only allow removing files (not subdirectories); check that here
-  for arg in args[1:]:
-    if os.path.isdir(os.path.join(origpath, arg)):
-      raise GotException("Got only allows files, not subdirectories, to be removed")
+  if not recurse:
+    # we only allow removing files (not subdirectories); check that here
+    for arg in args[1:]:
+      if os.path.isdir(os.path.join(origpath, arg)):
+        raise GotException("Got only allows files, not subdirectories, to be removed")
 
   walker(rm_cb, repo, origpath, None, args[1:])
 
@@ -1414,7 +1498,7 @@ def rm_local_command(args, repo, origpath):
 def main(argv):
   loglevel = logging.ERROR
   try:
-    (args, loglevel, logformat, remote, help_requested, verbose, force) = parse_opts(argv)
+    (args, loglevel, logformat, remote, help_requested, verbose, force, recurse) = parse_opts(argv)
 
     if help_requested:
       print(usage())
@@ -1452,7 +1536,7 @@ def main(argv):
     elif command == 'upgrade':
       upgrade_command(args)
     elif command == 'add':
-      add_command(args, repo, origpath, remote)
+      add_command(args, recurse, repo, origpath, remote)
     elif command == 'reset':
       reset_command(args, repo, origpath)
     elif command == 'get':
@@ -1460,7 +1544,7 @@ def main(argv):
     elif command == 'status':
       status_command(args, repo, origpath, verbose)
     elif command == 'rm':
-      rm_command(args, repo, origpath)
+      rm_command(args, recurse, repo, origpath)
     elif command == "add_remote":
       add_remote(args, False, repo)
     elif command == "remove_remote":
