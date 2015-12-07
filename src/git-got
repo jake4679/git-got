@@ -502,21 +502,21 @@ def usage():
   return """git got <command> [<args>]
 
 The available git got commands are:
-  init <name> <type> <url>         Initialize the default remote to be used with
-                                   the repository, where <type> is one of 'scp'
-                                   'srr', 'file', or 'ftp'.  The <name> is a
-                                   unique name used to refer to the repository
-                                   later.  The <url> is the fully qualified URL
-                                   to the remote.
+  init <name> <type> <url>         Initialize the default remote, where <type>
+                                   is one of 'scp', 'srr', 'file', or 'ftp'.
+                                   The <name> is a unique name used to refer to
+                                   the repository.  The <url> is the fully
+                                   qualified URL to the remote.
 
   get [-f] [<file>...]             With no arguments, retrieve all remote files
                                    to the local working area.  With one or more
                                    arguments, retrieve just those remote files
                                    to the local working area.  By default, if
                                    the file already exists locally, the "get"
-                                   command will skip downloading the file.  Use
-                                   the -f flag to force downloading the file,
-                                   even if it already exists.
+                                   command will skip downloading the file.  The
+                                   optional -f flag forces git got to download
+                                   the file from the remote, even if it already
+                                   exists locally.
 
   add [-r <remote] <file>...       Add one or more files to the remote
                                    repository.  Note that directories are not
@@ -527,9 +527,10 @@ The available git got commands are:
   status [-v] [<file>...]          With no arguments, request the status of all
                                    got tracked files.  With one or more
                                    arguments, request the status of the named
-                                   files.  The optional -v argument asks for
-                                   verbose mode where all files are printed,
-                                   even the ones that haven't changed.
+                                   files.  The optional -v argument requests
+                                   verbose mode where the status of all files
+                                   are shown, even the ones that haven't
+                                   changed.
 
   reset <file>...                  Overwrite one or more local got files with
                                    the remote copy.  Note that directories are
