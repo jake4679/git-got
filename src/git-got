@@ -637,8 +637,9 @@ def get_cb(repo, got_filename, real_filename, user_params):
   @param repo           Dulwich repository object
   @param got_filename   Got meta filename
   @param real_filename  Real filename
-  @param user_params    Ignored
+  @param user_params    Whether to force the transfer or not
   """
+  force = user_params
   try:
     logging.debug('get_cb: Using %s for local file' % real_filename)
     if not os.path.exists(got_filename):
@@ -649,7 +650,7 @@ def get_cb(repo, got_filename, real_filename, user_params):
     with open(got_filename, 'r') as storagefp:
       gotconf = json.load(storagefp)
 
-    if status_local(real_filename, gotconf['sha-256']):
+    if not force and status_local(real_filename, gotconf['sha-256']):
       logging.debug("File already exists, and has right checksum; skipping download...")
       return
     logging.debug("Downloading remote file...")
@@ -1039,9 +1040,11 @@ def parse_opts(argv):
   remote = None
   help_requested = False
   verbose = False
+  force = False
   try:
-    opts, args = getopt.gnu_getopt(argv[1:], 'd:hr:v', ['debug', 'help',
-                                                       'remote', 'verbose'])
+    opts, args = getopt.gnu_getopt(argv[1:], 'd:fhr:v', ['debug', 'force',
+                                                         'help', 'remote',
+                                                         'verbose'])
   except getopt.GetoptError as err:
     raise GotException(str(err), need_usage=True)
 
@@ -1063,6 +1066,8 @@ def parse_opts(argv):
       elif d_int >= 4:
         loglevel = logging.DEBUG
         logformat = logging.BASIC_FORMAT
+    elif o in ("-f", "--force"):
+      force = True
     elif o in ("-h", "--help"):
       help_requested = True
     elif o in ("-r", "--remote"):
@@ -1072,7 +1077,7 @@ def parse_opts(argv):
     else:
       raise GotException("unhandled option '%s'" % o)
 
-  return (args, loglevel, logformat, remote, help_requested, verbose)
+  return (args, loglevel, logformat, remote, help_requested, verbose, force)
 
 def find_git_path_and_chdir():
   """
@@ -1225,7 +1230,7 @@ def reset_command(args, repo, origpath):
 
   walker(reset_cb, repo, origpath, None, args[1:])
 
-def get_command(args, repo, origpath):
+def get_command(args, force, repo, origpath):
   """
   Run the get command to fetch git-got tracked file(s) to the local directory.
   If parameters are given, only the given files are fetched.  If no parameters
@@ -1243,7 +1248,7 @@ def get_command(args, repo, origpath):
   else:
     raise GotException("Not enough arguments to get command", need_usage=True)
 
-  walker(get_cb, repo, origpath, None, path)
+  walker(get_cb, repo, origpath, force, path)
 
 def status_command(args, repo, origpath, verbose):
   """
@@ -1404,7 +1409,7 @@ def rm_local_command(args, repo, origpath):
 def main(argv):
   loglevel = logging.ERROR
   try:
-    (args, loglevel, logformat, remote, help_requested, verbose) = parse_opts(argv)
+    (args, loglevel, logformat, remote, help_requested, verbose, force) = parse_opts(argv)
 
     if help_requested:
       print(usage())
@@ -1446,7 +1451,7 @@ def main(argv):
     elif command == 'reset':
       reset_command(args, repo, origpath)
     elif command == 'get':
-      get_command(args, repo, origpath)
+      get_command(args, force, repo, origpath)
     elif command == 'status':
       status_command(args, repo, origpath, verbose)
     elif command == 'rm':
