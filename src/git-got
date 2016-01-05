@@ -212,14 +212,14 @@ class SRR(Remote):
     response = requests.post('http://%s/srr/api/add_file' % server_name, data = m, headers = {'Content-Type' : m.content_type})
 
     if response.status_code != 200:
-      raise Exception("%s: %s" % (response.reason, result))
+      raise Exception("%s: %s" % (response.reason, response.status_code))
     sys.stdout.write("\n")
     new_id_re = re.compile(r' file_id=(\d+)\s*$')
     m = new_id_re.search(response.text)
     if m:
       return int(m.group(1))
     else:
-      raise Exception("Unexpected result from SRR: %s" % result)
+      raise Exception("Unexpected result from SRR")
 
   def _get_remote_path_srr(self, server, checksum):
     response = requests.get('http://%s/srr/api/file_metadata/sha256/%s' % (server, checksum))
