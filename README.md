@@ -6,6 +6,21 @@ This allows it to be used without modifying server side implementations for
 tools like gitorious.  Currently the supported transports are scp, file, and srr
 (a type of multi-part encoded http server).
 
+## Installation
+
+In order to install you need to install a few dependencies first, we provide
+`requirements.txt` file which is compatible with pip to install the dependencies
+for you. It's recommended you install this into your user environment by
+running:
+
+    pip install -r requirements.txt
+
+The whole list may not be complete, we only tested it on OSX 10.11.4 running
+Python 2.7.11 provided by **brew**.
+
+Once you have your dependencies installed you need to add `src/git-got` to your
+a place available through your `$PATH` environment variable.
+
 ## Basic Usage
 To start using Git Got place the accompanying script into your path.  Execute
 the following steps inside of an initialized repository.
