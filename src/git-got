@@ -557,7 +557,7 @@ The available git got commands are:
                                    file on the remote.  Also note that
                                    directories are not allowed.
 
-  add_remote <type> <name> <url>   Add an additional remote for storage.  The
+  add_remote <name> <type> <url>   Add an additional remote for storage.  The
                                    arguments are the same as for init.
 
   remove_remote <name>             Remove a remote from the repository.  This
