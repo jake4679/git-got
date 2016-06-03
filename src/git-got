@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright (c) 2015, 2016  Jake Cheuvront, Chris Lalancette
+# Copyright (c) 2015, 2016  Jake Cheuvront, Chris Lalancette, Manuel Naranjo
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -50,10 +50,31 @@ import ftplib
 import collections
 import contextlib
 import urllib
+import shutil
 
 VERSION = 1
 
 remote_objs = []
+
+LOCAL_CACHE_PATH = os.path.expanduser('~/.git-got-cache')
+
+if not os.path.isdir(LOCAL_CACHE_PATH):
+  try:
+    os.makedirs(LOCAL_CACHE_PATH)
+  except:
+    pass
+
+LOCAL_CACHE_AVAILABLE = os.path.isdir(LOCAL_CACHE_PATH)
+
+def load_with_cache(fn):
+  def wrapped(self, filename, checksum, *args, **kwargs):
+    if not self:
+      return fn(self, *args, **kwargs)
+    if self.load_from_cache(filename, checksum):
+      return
+    fn(self, filename, checksum, *args, **kwargs)
+    self.store_in_cache(filename, checksum)
+  return wrapped
 
 class Remote(object):
   def __init__(self, configuration):
@@ -77,8 +98,71 @@ class Remote(object):
   def load(self, filename, checksum):
     raise Exception("Load not implemented for this remote!")
 
+  def generate_path_for_cache(self, checksum):
+    checksum = checksum.encode('utf-8').lower()
+    return os.path.join(LOCAL_CACHE_PATH, checksum[0], checksum)
+
+  def load_from_cache(self, filename, checksum):
+    '''
+    Try loading the given file from cache instead of getting from the remote
+    server
+
+    filename: local path
+    checksum: original checksum
+    '''
+    if not LOCAL_CACHE_AVAILABLE:
+      # either the cache is not available, or disabled by an argument
+      return False
+
+    path = self.generate_path_for_cache(checksum)
+    logging.debug('checking for file in cache: %s', path)
+    if not os.path.isfile(path):
+      logging.debug('file not available in cache')
+      return False
+
+    logging.debug('retrieving file from cache')
+    try:
+      shutil.copyfile(path, filename)
+      return True
+    except Exception, e:
+      logging.exception('Failed retrieving from cache', e)
+    return False
+
   def store(self, filename, checksum):
     raise Exception("Store not implemented for this remote!")
+
+  def store_in_cache(self, filename, checksum):
+    '''
+    Store the file in our local cache
+
+    filename: source filename
+    checksum: checksum from file
+    '''
+    if not LOCAL_CACHE_AVAILABLE:
+      # either the cache is not available, or disabled by an argument
+      return False
+
+    path = self.generate_path_for_cache(checksum)
+    logging.debug('checking for file in cache: %s', path)
+    if os.path.isfile(path):
+      logging.debug('file already in our cache ignore cache updating')
+      return False
+
+    parent = os.path.dirname(path)
+    if not os.path.isdir(parent):
+      try:
+        os.makedirs(parent)
+      except Exception, e:
+        logging.exception('Failed creating parent for cache', e)
+        return False
+
+    logging.debug('storing into our cache: %s' % checksum)
+    try:
+      shutil.copyfile(filename, path)
+      return True
+    except Exception, e:
+      logging.exception('Failed storing object into our cache', e)
+    return False
 
   def scheme(self):
     raise Exception("Scheme not implemented for this remote!")
@@ -113,6 +197,7 @@ class SCP(Remote):
     sftp.chdir(remote_dir)
     return (ssh, sftp)
 
+  @load_with_cache
   def load(self, filename, checksum):
     logging.debug("load_scp")
     (ssh, sftp) = self._ssh_sftp_connect()
@@ -237,6 +322,7 @@ class SRR(Remote):
       print_transfer_string(down_current, down_total, self.filename,
                             "Downloading")
 
+  @load_with_cache
   def load(self, filename, checksum):
     checksum = checksum.encode('utf-8')
     logging.debug("load_srr %s %s" % (filename, checksum))
@@ -313,6 +399,7 @@ class File(Remote):
 
     self._transfer(filename, dstpath, "Uploading")
 
+  @load_with_cache
   def load(self, filename, checksum):
     logging.debug("load_file")
     parser = urlparse.urlparse(self.configuration['remote'])
@@ -379,6 +466,7 @@ class FTP(Remote):
     self.download_fp.write(block)
     print_transfer_string(self.total_transferred, self.total, self.filename, "Downloading")
 
+  @load_with_cache
   def load(self, filename, checksum):
     logging.debug("load_ftp")
     parser = urlparse.urlparse(self.configuration['remote'])
@@ -508,7 +596,7 @@ The available git got commands are:
                                    the repository.  The <url> is the fully
                                    qualified URL to the remote.
 
-  get [-f] [<file>...]             With no arguments, retrieve all remote files
+  get [-f] [-C] [<file>...]        With no arguments, retrieve all remote files
                                    to the local working area.  With one or more
                                    arguments, retrieve just those remote files
                                    to the local working area.  By default, if
@@ -516,7 +604,9 @@ The available git got commands are:
                                    command will skip downloading the file.  The
                                    optional -f flag forces git got to download
                                    the file from the remote, even if it already
-                                   exists locally.
+                                   exists locally. There's a local cache
+                                   available at ~/.git-got-cache with -C you can
+                                   disable this feature.
 
   add [-r <remote] [-R] <file>...  Add one or more files to the remote
                                    repository.  By default, directories are not
@@ -573,6 +663,9 @@ The available git got commands are:
                                    file.  Note that these bits are automatically
                                    restored when the file is re-downloaded from
                                    the remote.
+
+  clear_local_cache                Clears git got cache avavilable at
+                                   ~/.git-got-cache
 """
 
 def file_hash(filename):
@@ -1110,9 +1203,10 @@ def parse_opts(argv):
   force = False
   recurse = False
   try:
-    opts, args = getopt.gnu_getopt(argv[1:], 'd:fhRr:v', ['debug', 'force',
-                                                          'help', 'remote',
-                                                          'recurse', 'verbose'])
+    opts, args = getopt.gnu_getopt(argv[1:], 'd:fhRr:v:C', ['debug', 'force',
+                                                            'help', 'remote',
+                                                            'recurse', 'verbose',
+                                                            'no-cache'])
   except getopt.GetoptError as err:
     raise GotException(str(err), need_usage=True)
 
@@ -1144,6 +1238,9 @@ def parse_opts(argv):
       remote = a
     elif o in ("-v", "--verbose"):
       verbose = True
+    elif o in ("-C", "--no-cache"):
+      global LOCAL_CACHE_AVAILABLE
+      LOCAL_CACHE_AVAILABLE = False
     else:
       raise GotException("unhandled option '%s'" % o)
 
@@ -1479,6 +1576,18 @@ def rm_local_command(args, repo, origpath):
 
   walker(rm_local_cb, repo, origpath, None, ['.'])
 
+def clear_local_cache_command():
+  if not LOCAL_CACHE_AVAILABLE and os.path.isdir(LOCAL_CACHE_PATH):
+    raise GotException("You can't use -C with clear_local_cache")
+
+  print("Erasing git got local cache")
+
+  if os.path.isdir(LOCAL_CACHE_PATH):
+    shutil.rmtree(LOCAL_CACHE_PATH)
+  if os.path.isdir(LOCAL_CACHE_PATH):
+    raise GotException("Failed to clear cache")
+  print("Cleared local cache")
+
 ############################### MAIN ##########################################
 def main(argv):
   loglevel = logging.ERROR
@@ -1542,6 +1651,8 @@ def main(argv):
       mv_command(args, repo, origpath)
     elif command == "rm_local":
       rm_local_command(args, repo, origpath)
+    elif command == "clear_local_cache":
+      clear_local_cache_command()
     else:
       raise GotException("", need_usage=True)
     return 0
