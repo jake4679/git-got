@@ -70,6 +70,14 @@ def load_with_cache(fn):
     self.store_in_cache(filename, checksum)
   return wrapped
 
+def store_with_cache(fn):
+  def wrapped(self, filename, checksum, *args, **kwargs):
+    if not self:
+      return fn(self, *args, **kwargs)
+    fn(self, filename, checksum, *args, **kwargs)
+    self.store_in_cache(filename, checksum)
+  return wrapped
+
 class Remote(object):
   def __init__(self, configuration):
     self.configuration = configuration
@@ -199,6 +207,7 @@ class SCP(Remote):
     sftp.close()
     ssh.close()
 
+  @store_with_cache
   def store(self, filename, checksum):
     logging.debug("store_scp")
     (ssh, sftp) = self._ssh_sftp_connect()
@@ -243,6 +252,7 @@ class SRR(Remote):
     print_transfer_string(monitor.bytes_read, self.upload_len, self.filename,
                           "Uploading")
 
+  @store_with_cache
   def store(self, filename, checksum):
     logging.debug("store_srr")
     (server_name, parent_id) = self._get_location_info_srr()
@@ -378,6 +388,7 @@ class File(Remote):
     dst.close()
     src.close()
 
+  @store_with_cache
   def store(self, filename, checksum):
     logging.debug("store_file")
     parser = urlparse.urlparse(self.configuration['remote'])
@@ -419,6 +430,7 @@ class FTP(Remote):
     if name == self.remote_file:
       self.exists_on_remote = True
 
+  @store_with_cache
   def store(self, filename, checksum):
     logging.debug("store_ftp")
     parser = urlparse.urlparse(self.configuration['remote'])
