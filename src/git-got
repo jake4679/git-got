@@ -666,6 +666,10 @@ The available git got commands are:
 
   clear_local_cache                Clear the git got cache available at
                                    ~/.git-got-cache.
+
+  fill-local-cache                 Fills the git got local cache with the
+                                   tracked files from the current project.
+
 """
 
 def file_hash(filename):
@@ -1074,6 +1078,48 @@ def rm_local_cb(repo, got_filename, real_filename, cb_params):
     os.remove(real_filename)
   except OSError:
     pass
+
+def fill_local_cache_cb(repo, got_filename, real_filename, cb_params):
+  """
+  adds the file to the local cache if it exists and it's not present on the
+  cache.
+
+  @param repo           Dulwich repository object
+  @param got_filename   Got meta filename
+  @param real_filename  Real filename
+  @param cb_params      Verbose or not
+  """
+
+  def get_remote(conf):
+    for remote_obj in remote_objs:
+      if remote_obj.remote_name() == conf['remote']:
+        return remote_obj
+    raise GotException("Remote '%s' not known" % conf['remote'])
+
+  try:
+    with open(got_filename, 'r') as storagefp:
+      gotconf = json.load(storagefp)
+
+    if not os.path.exists(real_filename):
+      return "Missing locally: '%s' (remote '%s')" % (real_filename, gotconf['remote'])
+
+    checksum = gotconf['sha-256']
+    if not status_local(real_filename, checksum):
+      return "Modified: '%s' (remote '%s')" % (real_filename, gotconf['remote'])
+    # If we make it here, then the file exists locally and is the same as on
+    # the remote.  If it's not present in our cache, then add it
+
+    remote = get_remote(gotconf)
+    cache_path = remote.generate_path_for_cache(checksum)
+
+    if os.path.isfile(cache_path):
+      return "File already in cache: '%s'" % (real_filename)
+
+    if not remote.store_in_cache(real_filename, checksum):
+      return "Failed adding to local cache: '%s'" % (real_filename)
+    return "Adding file to local cache: '%s'" % (real_filename)
+  except Exception as e:
+    raise GotException("Failed to fill cache for '%s': %s" % (real_filename, str(e)))
 
 def file_is_managed_by_git(repo, filename):
   w = repo.get_walker(paths=[filename], max_entries=1)
@@ -1581,6 +1627,31 @@ def clear_local_cache_command():
     raise GotException("Failed to clear cache")
   print("Cleared local cache")
 
+def fill_local_cache_command(args, repo, origpath):
+  """
+  Run the fill_local_cache command to add to the local cache the files the
+  current project already have checked in.
+
+  @param args      The non-option arguments to this command
+  @param repo      Dulwich repository object
+  @param origpath  The original path that git-got was started in
+  """
+  print("Filling current cache")
+
+  if len(args) == 1:
+    path = ['.']
+  elif len(args) > 1:
+    path = args[1:]
+  else:
+    raise GotException("Not enough arguments to status command", need_usage=True)
+
+  changes = walker(fill_local_cache_cb, repo, origpath, [], path)
+
+  print('# Cache status')
+  for change in changes:
+    if None != change:
+      print('# %s' % change)
+
 ############################### MAIN ##########################################
 def main(argv):
   loglevel = logging.ERROR
@@ -1614,7 +1685,8 @@ def main(argv):
 
     if command != 'init':
       if not check_initialized():
-        raise GotException('Got not initialized', need_usage=True)
+        raise GotException('Got not initialized',
+                           need_usage=command!='fill-local-cache')
 
     if command != 'init' and command != 'upgrade':
       if not check_version():
@@ -1648,6 +1720,8 @@ def main(argv):
       rm_local_command(args, repo, origpath)
     elif command == "clear_local_cache":
       clear_local_cache_command()
+    elif command == "fill-local-cache":
+      fill_local_cache_command(args, repo, origpath)
     else:
       raise GotException("", need_usage=True)
     return 0
