@@ -664,7 +664,7 @@ The available git got commands are:
                                    restored when the file is re-downloaded from
                                    the remote.
 
-  clear_local_cache                Clear the git got cache available at
+  clear-local-cache                Clear the git got cache available at
                                    ~/.git-got-cache.
 
   fill-local-cache                 Fills the git got local cache with the
@@ -1718,7 +1718,7 @@ def main(argv):
       mv_command(args, repo, origpath)
     elif command == "rm_local":
       rm_local_command(args, repo, origpath)
-    elif command == "clear_local_cache":
+    elif command == "clear-local-cache":
       clear_local_cache_command()
     elif command == "fill-local-cache":
       fill_local_cache_command(args, repo, origpath)
