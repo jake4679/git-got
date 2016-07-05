@@ -37,7 +37,6 @@ import hashlib
 import json
 import fnmatch
 import requests
-import pycurl
 import dulwich.porcelain
 import errno
 import requests_toolbelt.multipart.encoder
@@ -334,16 +333,16 @@ class SRR(Remote):
 
     self.last_mb = -1
     self.filename = filename
+    total_length = 0
+    count = 0
+    r = requests.get(path, stream=True)
     with open(filename, 'wb') as f:
-      c = pycurl.Curl()
-      c.setopt(c.URL, path)
-      c.setopt(c.WRITEDATA, f)
-      c.setopt(c.NOPROGRESS, 0)
-      c.setopt(c.PROGRESSFUNCTION, self._curlprogress)
-      c.perform()
-      if c.getinfo(pycurl.HTTP_CODE) == 404:
-        raise Exception("Unexpected result from SRR: %d" % c.getinfo(pycurl.HTTP_CODE))
-      c.close()
+      total_length = int(r.headers['Content-Length'])
+      for chunk in r.iter_content(chunk_size=4096):
+        if chunk: # filter out keep-alive new chunks
+          count = count+len(chunk)
+          f.write(chunk)
+          print_transfer_string(count, total_length, filename, "Downloading")
 
     sys.stdout.write("\n")
 
