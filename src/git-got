@@ -1248,9 +1248,9 @@ def parse_opts(argv):
   force = False
   recurse = False
   try:
-    opts, args = getopt.gnu_getopt(argv[1:], 'd:fhRr:v:', ['debug', 'force',
-                                                            'help', 'remote',
-                                                            'recurse', 'verbose'])
+    opts, args = getopt.gnu_getopt(argv[1:], 'd:fhRr:v', ['debug', 'force',
+                                                          'help', 'remote',
+                                                          'recurse', 'verbose'])
   except getopt.GetoptError as err:
     raise GotException(str(err), need_usage=True)
 
