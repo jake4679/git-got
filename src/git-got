@@ -124,10 +124,7 @@ class Remote(object):
     size = os.path.getsize(path)
 
     try:
-      print_transfer_string(0, size, filename, 'Downloading (cached)')
-      shutil.copyfile(path, filename)
-      print_transfer_string(size, size, filename, 'Downloading (cached)')
-      sys.stdout.write("\n")
+      copy_file(path, filename, "Downloading (cached)", filename)
       return True
     except Exception, e:
       logging.exception('Failed retrieving from cache', e)
@@ -358,39 +355,7 @@ class SRR(Remote):
 class File(Remote):
   def __init__(self, configuration):
     Remote.__init__(self, configuration)
-    self.block_size = 8192
-
-  def _transfer(self, srcpath, dstpath, direction):
-    print_fname = srcpath
-    if direction == "Downloading":
-      print_fname = dstpath
-
-    # FIXME: we may want to add a check to ensure that dirname(srcpath) exists
-    # before starting the transfer.  Otherwise the error message that happens
-    # isn't entirely clear which part is missing.
-
-    src = open(srcpath, "rb")
-    dst = open(dstpath, "wb")
-
-    total_len = file_length(src)
-    transferred = 0
-
-    while True:
-      block = src.read(self.block_size)
-
-      if not block:
-        # end of file
-        break
-      else:
-        dst.write(block)
-
-      print_transfer_string(transferred, total_len, print_fname, direction)
-      transferred += self.block_size
-
-    print_transfer_string(total_len, total_len, print_fname, direction)
-    sys.stdout.write("\n")
-    dst.close()
-    src.close()
+    self.block_size = 16384
 
   @store_with_cache
   def store(self, filename, checksum):
@@ -401,15 +366,15 @@ class File(Remote):
       logging.debug("File existed on remote, skipping upload...")
       return
 
-    self._transfer(filename, dstpath, "Uploading")
+    copy_file(filename, dstpath, "Uploading", filename, self.block_size)
 
   @load_with_cache
   def load(self, filename, checksum):
     logging.debug("load_file")
     parser = urlparse.urlparse(self.configuration['remote'])
 
-    self._transfer(os.path.join(parser.path, checksum + ".got"), filename,
-                   "Downloading")
+    copy_file(os.path.join(parser.path, checksum + ".got"), filename,
+              "Downloading", filename, self.block_size)
 
   def scheme(self):
     return 'file'
@@ -532,7 +497,42 @@ class GotException(Exception):
     return self.msg + usagestr
 
 ############################# HELPERS #######################################
-def print_transfer_string(transferred, total, filename, direction):
+def copy_file(srcpath, dstpath, prefix, outfilename, blocksize=16384):
+  '''
+  A function to copy a file from srcpath to dstpath.  While copying it will
+  print a progress string with the prefix and outfilename specified.
+
+  @param srcpath      The source to copy data from
+  @param dstpath      The destination to write data to
+  @param prefix       The prefix to print in the progress string
+  @param outfilename  The filename to print in the progress string
+  @param blocksize    How much data to transfer at a time; defaults to 16384
+  '''
+  # FIXME: we may want to add a check to ensure that dirname(srcpath) exists
+  # before starting the transfer.  Otherwise the error message that happens
+  # isn't entirely clear which part is missing.
+
+  with open(srcpath, 'rb') as src:
+    with open(dstpath, 'wb') as dst:
+      total_len = file_length(src)
+      transferred = 0
+
+      while True:
+        block = src.read(blocksize)
+
+        if not block:
+          # end of file
+          break
+        else:
+          dst.write(block)
+
+        print_transfer_string(transferred, total_len, outfilename, prefix)
+        transferred += len(block)
+
+      print_transfer_string(total_len, total_len, outfilename, prefix)
+      sys.stdout.write("\n")
+
+def print_transfer_string(transferred, total, filename, prefix):
   """
   A function to print out what percentage of a transfer has happened to which
   file, and in which direction (up or down).
@@ -540,7 +540,7 @@ def print_transfer_string(transferred, total, filename, direction):
   @param transferred  The number of bytes transferred so far
   @param total        The total number of bytes in transfer
   @param filename     The local filename being downloaded or uploaded
-  @param direction    A string representing the direction of the transfer
+  @param prefix       A string that will be put on the front of the output
   """
   if total > 1073741824:
     suffix = "GB"
@@ -563,7 +563,7 @@ def print_transfer_string(transferred, total, filename, direction):
     percent = 100
   else:
     percent = int(transferred * 100 / total)
-  # The "fixed" length for our printed string is the length of the direction,
+  # The "fixed" length for our printed string is the length of the prefix,
   # plus one for the space, plus one for the opening quote for the filename,
   # plus one for the closing quote for the filename, plus one for a space, plus
   # the length of the total size (used to ensure the length stays constant),
@@ -573,7 +573,7 @@ def print_transfer_string(transferred, total, filename, direction):
   # three for the percentage (fixed so that we don't change how we truncate the
   # filename at the end of the transfer), plus one for the percent sign, plus
   # one for the closing parentheses.
-  strlen_no_file = len(direction) + 1 + 1 + 1 + 1 + len(str(divided_total)) + 1 + len(str(divided_total)) + 1 + len(suffix) + 1 + 1 + 3 + 1 + 1
+  strlen_no_file = len(prefix) + 1 + 1 + 1 + 1 + len(str(divided_total)) + 1 + len(str(divided_total)) + 1 + len(suffix) + 1 + 1 + 3 + 1 + 1
 
   # Now that we know the fixed length of the string, we can figure out how much
   # of the filename we can afford to print.  Note that we want to print the
@@ -583,7 +583,7 @@ def print_transfer_string(transferred, total, filename, direction):
   if strlen_no_file + len(filename) > 80:
     filename = filename[::-1][:(80-strlen_no_file)][::-1]
   sys.stdout.write("\r")
-  sys.stdout.write("{0} '{1}' {2}/{3} {4} ({5}%)".format(direction,
+  sys.stdout.write("{0} '{1}' {2}/{3} {4} ({5}%)".format(prefix,
                                                          filename,
                                                          divided_tran,
                                                          divided_total,
