@@ -121,8 +121,13 @@ class Remote(object):
       return False
 
     logging.debug('retrieving file from cache')
+    size = os.path.getsize(path)
+
     try:
+      print_transfer_string(0, size, filename, 'Downloading (cached)')
       shutil.copyfile(path, filename)
+      print_transfer_string(size, size, filename, 'Downloading (cached)')
+      sys.stdout.write("\n")
       return True
     except Exception, e:
       logging.exception('Failed retrieving from cache', e)
