@@ -946,13 +946,12 @@ def rm_cb(repo, got_filename, real_filename, cb_params):
       dulwich.porcelain.add(repo, got_filename)
     # now remove the entry from .gitignore
     logging.debug("Removing file from gitignore")
-    infile = open('.gitignore', 'rb')
-    outfile = open('.tmp.gitignore', 'wb')
-    for line in infile.xreadlines():
-      if line != real_filename + "\n":
-        outfile.write(line)
-    outfile.close()
-    infile.close()
+    with open('.gitignore', 'rb') as infp:
+      with open('.tmp.gitignore', 'wb') as outfp:
+        for line in infp.xreadlines():
+          if line != real_filename + "\n":
+            outfp.write(line)
+
     os.rename(".tmp.gitignore", ".gitignore")
     dulwich.porcelain.add(repo, ".gitignore")
   except Exception as e:
@@ -1056,15 +1055,14 @@ def mv_cb(repo, got_filename, real_filename, cb_params):
 
     # now move the .gitignore entry
     logging.debug("Moving file in .gitignore")
-    infile = open('.gitignore', 'rb')
-    outfile = open('.tmp.gitignore', 'wb')
-    for line in infile.xreadlines():
-      if line != real_filename + "\n":
-        outfile.write(line)
-    outfile.write('%s\n' % new_real_filename)
-    outfile.close()
-    infile.close()
-    os.rename(".tmp.gitignore", ".gitignore")
+    with open('.gitignore', 'rb') as infp:
+      with open('.tmp.gitignore', 'wb') as outfp:
+        for line in infp.xreadlines():
+          if line != real_filename + "\n":
+            outfp.write(line)
+        outfp.write('%s\n' % new_real_filename)
+
+      os.rename(".tmp.gitignore", ".gitignore")
     dulwich.porcelain.add(repo, ".gitignore")
   except Exception as e:
     raise GotException("Failed to move '%s' to '%s': %s" % (real_filename, new_real_filename, str(e)))
