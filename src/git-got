@@ -262,11 +262,8 @@ class SRR(Remote):
     description = 'Got storage for %s @ TBD hashtag' % (filename)
 
     # first check to see if the file already exists in the SRR
-    conn = httplib.HTTPConnection(server_name)
-    conn.request("GET", "/srr/api/file_metadata/sha256/%s" % checksum)
-    response = conn.getresponse()
-    conn.close()
-    if response.status == 200:
+    r = requests.get('%s://%s/srr/api/file_metadata/sha256/%s' % (scheme, server_name, checksum))
+    if r.status_code == 200:
       logging.debug("File existed on remote, skipping upload...")
       return
 
