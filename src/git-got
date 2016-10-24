@@ -760,7 +760,7 @@ def get_cb(repo, got_filename, real_filename, cb_params):
       # get or reset a file that got is not tracking
       raise Exception("'%s' is not tracked by got" % (real_filename))
 
-    with open(got_filename, 'r') as storagefp:
+    with open(got_filename, 'rb') as storagefp:
       gotconf = json.load(storagefp)
 
     if not force and status_local(real_filename, gotconf['sha-256']):
@@ -817,7 +817,7 @@ def add_cb(repo, got_filename, real_filename, cb_params):
     csum = file_hash(real_filename)
     remote_obj.store(real_filename, csum)
     gotconf = { 'sha-256': csum, 'remote': remote_obj.remote_name(), 'mode': os.stat(real_filename).st_mode }
-    with open(got_filename, 'w') as out:
+    with open(got_filename, 'wb') as out:
       json.dump(gotconf, out)
     dulwich.porcelain.add(repo, got_filename)
 
@@ -851,7 +851,7 @@ def status_cb(repo, got_filename, real_filename, cb_params):
   @param cb_params      Verbose or not
   """
   try:
-    with open(got_filename, 'r') as storagefp:
+    with open(got_filename, 'rb') as storagefp:
       gotconf = json.load(storagefp)
 
     if not os.path.exists(real_filename):
@@ -970,7 +970,7 @@ def remove_remote_check_cb(repo, got_filename, real_filename, cb_params):
   @param cb_params      The name of the remote
   """
   try:
-    with open(got_filename, 'r') as storagefp:
+    with open(got_filename, 'rb') as storagefp:
       gotconf = json.load(storagefp)
 
     remote_name = cb_params
@@ -992,7 +992,7 @@ def chmod_cb(repo, got_filename, real_filename, cb_params):
   @param cb_params      The new mode for the file
   """
   try:
-    with open(got_filename, 'r') as storagefp:
+    with open(got_filename, 'rb') as storagefp:
       gotconf = json.load(storagefp)
 
     newmode = int(cb_params, 0)
@@ -1002,7 +1002,7 @@ def chmod_cb(repo, got_filename, real_filename, cb_params):
 
     # first change the mode in the configuration
     gotconf['mode'] = newmode
-    with open(got_filename, 'w') as out:
+    with open(got_filename, 'wb') as out:
       json.dump(gotconf, out)
 
     dulwich.porcelain.add(repo, got_filename)
@@ -1101,7 +1101,7 @@ def fill_local_cache_cb(repo, got_filename, real_filename, cb_params):
     raise GotException("Remote '%s' not known" % conf['remote'])
 
   try:
-    with open(got_filename, 'r') as storagefp:
+    with open(got_filename, 'rb') as storagefp:
       gotconf = json.load(storagefp)
 
     if not os.path.exists(real_filename):
@@ -1332,7 +1332,7 @@ def check_initialized():
   global remote_objs
   if os.path.isfile('.got/default'):
     for f in os.listdir(".got"):
-      with open(os.path.join('.got', f), 'r') as storagefp:
+      with open(os.path.join('.got', f), 'rb') as storagefp:
         configuration = json.load(storagefp)
       remote_objs.append(RemoteObjFactory(configuration['remote_type'],
                                           configuration['remote'],
@@ -1391,7 +1391,7 @@ def add_remote(args, default, repo):
 
   mkdir_p('.got')
   configuration = { 'remote' : remote , 'remote_type' : remote_type , 'version' : VERSION, 'name': name, 'default': default }
-  with open(filename, 'a') as storagefile:
+  with open(filename, 'ab') as storagefile:
     json.dump(configuration, storagefile)
   dulwich.porcelain.add(repo, filename)
 
