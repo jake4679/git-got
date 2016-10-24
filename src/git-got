@@ -40,7 +40,6 @@ import requests
 import dulwich.porcelain
 import errno
 import requests_toolbelt.multipart.encoder
-import httplib
 import re
 import paramiko
 import urlparse
