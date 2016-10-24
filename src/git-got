@@ -234,7 +234,7 @@ class SCP(Remote):
     ssh.close()
 
   def scheme(self):
-    return 'ssh'
+    return ['ssh']
 
 ############################ SRR BACKEND #####################################
 class SRR(Remote):
@@ -247,7 +247,7 @@ class SRR(Remote):
   def _get_location_info_srr(self):
     logging.debug("srr._get_location_info_srr")
     parser = urlparse.urlparse(self.configuration['remote'])
-    return (parser.hostname, os.path.basename(parser.path))
+    return (parser.scheme, parser.hostname, os.path.basename(parser.path))
 
   def upload_cb(self, monitor):
     print_transfer_string(monitor.bytes_read, self.upload_len, self.filename,
@@ -256,7 +256,7 @@ class SRR(Remote):
   @store_with_cache
   def store(self, filename, checksum):
     logging.debug("store_srr")
-    (server_name, parent_id) = self._get_location_info_srr()
+    (scheme, server_name, parent_id) = self._get_location_info_srr()
     target_id = ''
     remote_path = '%s' % checksum
     description = 'Got storage for %s @ TBD hashtag' % (filename)
@@ -294,7 +294,7 @@ class SRR(Remote):
     m = requests_toolbelt.multipart.encoder.MultipartEncoderMonitor(e,
                                                                     self.upload_cb)
 
-    response = requests.post('http://%s/srr/api/add_file' % server_name, data = m, headers = {'Content-Type' : m.content_type})
+    response = requests.post('%s://%s/srr/api/add_file' % (scheme, server_name), data = m, headers = {'Content-Type' : m.content_type})
 
     if response.status_code != 200:
       raise Exception("%s: %s" % (response.reason, response.status_code))
@@ -306,8 +306,8 @@ class SRR(Remote):
     else:
       raise Exception("Unexpected result from SRR")
 
-  def _get_remote_path_srr(self, server, checksum):
-    response = requests.get('http://%s/srr/api/file_metadata/sha256/%s' % (server, checksum))
+  def _get_remote_path_srr(self, scheme, server, checksum):
+    response = requests.get('%s://%s/srr/api/file_metadata/sha256/%s' % (scheme, server, checksum))
     if response.status_code == 404:
       raise Exception("Unexpected result from SRR: %d" % response.status_code)
     return urllib.quote(response.json()['url'].encode('utf-8'), ':/%')
@@ -326,11 +326,11 @@ class SRR(Remote):
   def load(self, filename, checksum):
     checksum = checksum.encode('utf-8')
     logging.debug("load_srr %s %s" % (filename, checksum))
-    (server, parent_id) = self._get_location_info_srr()
+    (scheme, server, parent_id) = self._get_location_info_srr()
     server = server.encode('utf-8')
     parent_id = parent_id.encode('utf-8')
 
-    path = self._get_remote_path_srr(server, checksum)
+    path = self._get_remote_path_srr(scheme, server, checksum)
     logging.debug("load_srr, filename %s, path %s" % (filename, path))
 
     self.last_mb = -1
@@ -349,7 +349,7 @@ class SRR(Remote):
     sys.stdout.write("\n")
 
   def scheme(self):
-    return 'http'
+    return ['http','https']
 
 ############################ FILE BACKEND #####################################
 class File(Remote):
@@ -377,7 +377,7 @@ class File(Remote):
               "Downloading", filename, self.block_size)
 
   def scheme(self):
-    return 'file'
+    return ['file']
 
 ############################ FTP BACKEND #####################################
 class FTP(Remote):
@@ -461,7 +461,7 @@ class FTP(Remote):
     sys.stdout.write("\n")
 
   def scheme(self):
-    return 'ftp'
+    return ['ftp']
 
 def RemoteObjFactory(remote_type, remote, configuration):
   if remote_type == 'srr':
@@ -477,7 +477,7 @@ def RemoteObjFactory(remote_type, remote, configuration):
 
   parser = urlparse.urlparse(remote)
   objscheme = obj.scheme()
-  if parser.scheme != obj.scheme():
+  if parser.scheme not in obj.scheme():
     raise GotException("Remote of type '%s' must have URL scheme of '%s'" % (remote_type, objscheme))
 
   return obj
