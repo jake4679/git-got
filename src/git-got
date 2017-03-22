@@ -351,7 +351,7 @@ class SRR(Remote):
 class File(Remote):
     def __init__(self, configuration):
         Remote.__init__(self, configuration)
-        self.block_size = 16384
+        self.block_size = 1048576
 
     @store_with_cache
     def store(self, filename, checksum):
@@ -493,7 +493,7 @@ class GotException(Exception):
         return self.msg + usagestr
 
 ############################# HELPERS #######################################
-def copy_file(srcpath, dstpath, prefix, outfilename, blocksize=16384):
+def copy_file(srcpath, dstpath, prefix, outfilename, blocksize=1048576):
     '''
     A function to copy a file from srcpath to dstpath.  While copying it will
     print a progress string with the prefix and outfilename specified.
@@ -502,7 +502,7 @@ def copy_file(srcpath, dstpath, prefix, outfilename, blocksize=16384):
     @param dstpath      The destination to write data to
     @param prefix       The prefix to print in the progress string
     @param outfilename  The filename to print in the progress string
-    @param blocksize    How much data to transfer at a time; defaults to 16384
+    @param blocksize    How much data to transfer at a time; defaults to 1048576
     '''
     # FIXME: we may want to add a check to ensure that dirname(srcpath) exists
     # before starting the transfer.  Otherwise the error message that happens
