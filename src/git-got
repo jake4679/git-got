@@ -336,7 +336,7 @@ class SRR(Remote):
         r = requests.get(path, stream=True)
         with open(filename, 'wb') as f:
             total_length = int(r.headers['Content-Length'])
-            for chunk in r.iter_content(chunk_size=4096):
+            for chunk in r.iter_content(chunk_size=1048576):
                 if chunk: # filter out keep-alive new chunks
                     count = count+len(chunk)
                     f.write(chunk)
